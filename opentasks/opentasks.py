@@ -20,13 +20,19 @@ Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 Boston, MA  02110-1301, USA.
 """
 
+import os;
+import sys;
+import re;
+import oursql;
+
+from datetime import datetime;
+
 import pywikibot;
-import os, sys, re, oursql;
 
 class OpenTaskUpdater:
 	def __init__(self, verbose=False, lang=None, mysqlConf=None,
 		     taskPage=None, taskDef=None, pagesPerCategory=5,
-		     editComment=None, testRun=False):
+		     editComment=None, testRun=False, updateInterval=60):
 		"""
 		Instantiate an object intended to update the list of open tasks.
 
@@ -91,9 +97,17 @@ class OpenTaskUpdater:
 				"split": u"All articles to be split",
 				"expand" : u"All articles to be expanded",
 				"stub" : u"Stub categories",
+				"afdrelist" : {
+					"catname": u"Relisted AfD debates",
+					"pattern": u"Articles_for_deletion/%", # filter
+					"exclude": u"%/Log/%", # remove these
+					"namespace": 4, # namespace of pages we're looking for
+					"prefix": u"Wikipedia:", # namespace prefix
+					},
 				};
 
 		self.testRun = testRun;
+
 		self.verbose = verbose;
 		self.dbConn = None;
 		self.dbCursor = None;
@@ -154,6 +168,19 @@ class OpenTaskUpdater:
                                       AND page_random >= RAND()
                                       ORDER BY page_random LIMIT ?""";
 
+		# Query to get pages from the relisted AfD category, matching a given
+		# pattern, enabling exclusion based on certain titles (e.g. log-pages)
+		# and limiting to a given namespace
+		afdPageQuery = r"""SELECT page_id, page_title
+                                   FROM page JOIN categorylinks ON page_id=cl_from
+                                   WHERE cl_to=?
+                                   AND page_title LIKE ?
+                                   AND page_title NOT LIKE ?
+                                   AND page_namespace=?
+                                   AND page_random >= RAND()
+                                   ORDER BY page_random
+                                   LIMIT ?""";
+
 		# connect to the wiki and log in
 		if self.verbose:
 			sys.stderr.write("Info: connecting to {lang}wiki\n".format(lang=self.lang));
@@ -162,7 +189,7 @@ class OpenTaskUpdater:
 		wikiSite.login();
 
 		# Did we log in?
-		if wikiSite.username() == None:
+		if wikiSite.username() is None:
 			sys.stderr.write("Error: failed to log in correctly, aborting!\n");
 			return False;
 
@@ -194,7 +221,7 @@ class OpenTaskUpdater:
 				sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
 				return False;
 
-			if randStubCategory == None:
+			if not randStubCategory:
 				# something went wrong
 				sys.stderr.write("Error: Unable to find random stub category, aborting!\n");
 				return False;
@@ -220,9 +247,37 @@ class OpenTaskUpdater:
 		if self.verbose:
 			sys.stderr.write("Info: Done finding stub tasks\n");
 
+		# Handle relisted AfDs, they use a slightly different query
+		if "afdrelist" in self.taskDef:
+			if self.verbose:
+				sys.stderr.write("Info: fetching relisted articles for deletion...\n");
+			try:
+				foundPages = [];
+				self.dbCursor.execute(afdPageQuery,
+						      (re.sub(" ", "_",
+							      self.taskDef['afdrelist']['catname']),
+						       self.taskDef['afdrelist']['pattern'],
+						       self.taskDef['afdrelist']['exclude'],
+						       self.taskDef['afdrelist']['namespace'],
+						       self.numPages));
+				for (pageId, pageTitle) in self.dbCursor:
+					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
+								  'utf-8', errors='strict'));
+				sys.stderr.write("Debug: found {n} relisted AfDs\n".format(n=len(foundPages)));
+				self.foundTasks['afdrelist'] = foundPages;
+			except oursql.Error, e:
+				sys.stderr.write("Error: Unable to execute query to get relisted AfDs, aborting!\n");
+				sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
+				return False;
+
+			if self.verbose:
+				sys.stderr.write(u"Info: done fetching relisted AfDs\n");
+
+		# Now, for all the other categories...
 		for (taskId, taskCategory) in self.taskDef.iteritems():
-			if taskId == 'stub':
-				# already did those...
+			if taskId == 'stub' \
+				    or taskId == 'afdrelist':
+				# already done...
 				continue;
 
 			if self.verbose:
@@ -250,10 +305,23 @@ class OpenTaskUpdater:
 		# Go through the found tasks and turn the list of page titles
 		# into a unicode string with a list of links...
 		for (taskId, pageList) in self.foundTasks.iteritems():
-			if len(pageList) == 0:
+			if not pageList:
 				self.foundTasks[taskId] = u"None, ";
 			else:
-				self.foundTasks[taskId] = u", ".join([pywikibot.Page(wikiSite, page).title(asLink=True) for page in pageList]);
+				if taskId == "afdrelist":
+					# Switch SQL LIKE-pattern into a regex we can use
+					# to strip that from the page title
+					stripPattern = u"";
+					pattern = self.taskDef['afdrelist']['pattern'];
+					if pattern: # more than ""?
+						stripPattern = re.sub('%', "", pattern);
+						stripPattern = re.sub("_", " ", stripPattern);
+
+					# Build all the links manually
+					self.foundTasks[taskId] = u", ".join([u"[[{prefix}{fulltitle}|{linktitle}]]".format(prefix=self.taskDef['afdrelist']['prefix'], fulltitle=page, linktitle=re.sub(stripPattern, u"", page)) for page in pageList]);
+
+				else:
+					self.foundTasks[taskId] = u", ".join([pywikibot.Page(wikiSite, page).title(asLink=True) for page in pageList]);
 
 		if self.verbose:
 			sys.stderr.write(u"Info: Turned page titles into page links, getting wikitext of page {taskpage}\n".format(taskpage=self.taskPage).encode('utf-8'));
@@ -266,6 +334,8 @@ class OpenTaskUpdater:
 			sys.stderr.write(u"Warning: Task page {title} does not exist, aborting!\n".format(title=self.taskPage).encode('utf-8'));
 		except pywikibot.exceptions.IsRedirectPage:
 			sys.stderr.write(u"Warning: Task page {title} is a redirect, aborting!\n".format(title=self.taskPage).encode('utf-8'));
+		except pywikibot.data.api.TimeoutError:
+			sys.stderr.write(u"Error: API request to {lang}-WP timed out, unable to get wikitext of {title}, cannot continue!\n".format(lang=self.lang, title=self.taskPage));
 
 		if tasktext is None:
 			return False;
@@ -293,10 +363,17 @@ class OpenTaskUpdater:
 			except pywikibot.exceptions.PageNotSaved as e:
 				sys.stderr.write(u"Error: Saving page {title} failed.\nError: {etext}\n".format(title=self.taskPage, etext=e).encode('utf-8'));
 				return False;
+			except pywikibot.data.api.TimeoutError:
+				sys.stderr.write(u"Error: Saving page {title} failed, API request timeout fatal\n".format(title=self.taskPage).encode('utf-8'));
+				return False
 
 		# OK, done
 		if self.verbose:
 			sys.stderr.write("Info: List of open tasks successfully updated!\n");
+
+		if not self.disconnectDatabase():
+			sys.stderr.write(u"Warning: Unable to cleanly disconnect from the database!\n");
+
 		return True;
 
 def main():
