@@ -32,7 +32,7 @@ import pywikibot;
 class OpenTaskUpdater:
 	def __init__(self, verbose=False, lang=None, mysqlConf=None,
 		     taskPage=None, taskDef=None, pagesPerCategory=5,
-		     editComment=None, testRun=False, updateInterval=60):
+		     editComment=None, testRun=False):
 		"""
 		Instantiate an object intended to update the list of open tasks.
 
@@ -303,10 +303,11 @@ class OpenTaskUpdater:
 				sys.stderr.write("Info: Find complete, found {n} pages in this category\n".format(n=len(foundPages)));
 
 		# Go through the found tasks and turn the list of page titles
-		# into a unicode string with a list of links...
+		# into a unicode string, we write an unordered list (*)
+		# where each list item is a link to a given page
 		for (taskId, pageList) in self.foundTasks.iteritems():
 			if not pageList:
-				self.foundTasks[taskId] = u"None, ";
+				self.foundTasks[taskId] = u"None";
 			else:
 				if taskId == "afdrelist":
 					# Switch SQL LIKE-pattern into a regex we can use
@@ -318,10 +319,10 @@ class OpenTaskUpdater:
 						stripPattern = re.sub("_", " ", stripPattern);
 
 					# Build all the links manually
-					self.foundTasks[taskId] = u", ".join([u"[[{prefix}{fulltitle}|{linktitle}]]".format(prefix=self.taskDef['afdrelist']['prefix'], fulltitle=page, linktitle=re.sub(stripPattern, u"", page)) for page in pageList]);
+					self.foundTasks[taskId] = u"\n".join([u"* [[{prefix}{fulltitle}|{linktitle}]]".format(prefix=self.taskDef['afdrelist']['prefix'], fulltitle=page, linktitle=re.sub(stripPattern, u"", page)) for page in pageList]);
 
 				else:
-					self.foundTasks[taskId] = u", ".join([pywikibot.Page(wikiSite, page).title(asLink=True) for page in pageList]);
+					self.foundTasks[taskId] = u"\n".join([u"* {title}".format(title=pywikibot.Page(wikiSite, page).title(asLink=True)) for page in pageList]);
 
 		if self.verbose:
 			sys.stderr.write(u"Info: Turned page titles into page links, getting wikitext of page {taskpage}\n".format(taskpage=self.taskPage).encode('utf-8'));
@@ -344,9 +345,11 @@ class OpenTaskUpdater:
 			sys.stderr.write(u"Info: got wikitext, substituting page lists...\n");
 
 		for (taskId, pageList) in self.foundTasks.iteritems():
+			# note: using re.DOTALL because we need .*? to match \n
+			#       since our content is a list
 			tasktext = re.sub(ur'<span id="{taskid}">(.*?)</span>'.format(taskid=taskId),
-					  ur'<span id="{taskid}">{pagelist}</span>'.format(taskid=taskId, pagelist=pageList),
-					  tasktext);
+					  ur'<span id="{taskid}">\n{pagelist}</span>'.format(taskid=taskId, pagelist=pageList),
+					  tasktext, flags=re.DOTALL);
 
 		if self.testRun:
 			sys.stderr.write(u"Info: Running a test, printing out new wikitext:\n\n");
