@@ -10,3 +10,9 @@ Files in this repository
 
 opentasks/opentasks.py
   Python script to update a list of open tasks on Wikipedia.
+
+opentasks/logtable.sql
+  MySQL table definition for log data on pages that were selected.
+
+classifier/ToolserverClassificationServer.jar
+  Exposes an XML-RPC server interface to a WEKA RandomTree classifier.
