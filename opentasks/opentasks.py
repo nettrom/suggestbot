@@ -41,6 +41,7 @@ class DummyConfig:
 	"""
 	def __init__(self):
 		self.config = {
+			'WP_LANGCODE': u"en",
 			'CLASSIFIER_HOSTNAME': 'localhost',
 			'CLASSIFIER_HOSTPORT': 10129,
 			'QUALWS_URL': u'http://toolserver.org/~nettrom/suggestbot/quality-metadata.fcgi',

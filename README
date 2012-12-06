@@ -14,5 +14,17 @@ opentasks/opentasks.py
 opentasks/logtable.sql
   MySQL table definition for log data on pages that were selected.
 
+opentasks/opentask-short.py
+  Python script to update a template with a (short) list of tasks
+  from a single category with some selection criteria.
+
+opentasks/opentask_short.sql
+  MySQL table definition for caching popularity and quality data
+  to prevent spending time re-computing it all the time.
+
+opentasks/cache-updater.py
+  Python script to just update the cache with popularity data
+  for all listed pages, typically done once a day.
+
 classifier/ToolserverClassificationServer.jar
   Exposes an XML-RPC server interface to a WEKA RandomTree classifier.
