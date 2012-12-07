@@ -150,17 +150,17 @@ class OpentaskShort:
 
         # Query to compare our cached list with current data
         # to find pages which should be deleted.
-        deletedPagesQuery = ur"""SELECT /* LIMIT:120 */
-                                 op.page_id
+        deletedPagesQuery = ur"""SELECT op.page_id
                                  FROM {cachetable} op
-                                 LEFT JOIN page p
-                                 ON op.page_id=p.page_id
-                                 JOIN categorylinks cl
-                                 ON p.page_id=cl.cl_from
-                                 WHERE cl.cl_to=?
-                                 AND p.page_namespace=?
-                                 AND p.page_len <= ?
-                                 AND p.page_id IS NULL""".format(cachetable=self.cacheTable);
+                                 LEFT JOIN
+                                    (SELECT page_id
+                                     FROM page p JOIN categorylinks cl
+                                     ON p.page_id=cl.cl_from
+                                     WHERE cl_to=?
+                                     AND p.page_namespace=?
+                                     AND p.page_len <= ?) AS cp
+                                 ON op.page_id=cp.page_id
+                                 WHERE cp.page_id IS NULL""".format(cachetable=self.cacheTable);
 
         deletePageQuery = ur"""DELETE FROM {cachetable}
                                WHERE page_id=?""".format(cachetable=self.cacheTable);
@@ -222,13 +222,14 @@ class OpentaskShort:
 
         # Query to get data for all pages
         # which are not protected (this is a quick shortcut to find non-protected pages,
-        # might find some false positives).
+        # might find some false positives), and which have a minimum amount of views.
         getAllPagesQuery = ur"""SELECT p.page_id, p.page_title, op.popcount, op.quality
                                 FROM page p JOIN {cachetable} op
                                 ON p.page_id=op.page_id
                                 LEFT JOIN page_restrictions pr
                                 ON p.page_id=pr.pr_page
-                                WHERE pr.pr_page IS NULL""".format(cachetable=self.cacheTable);
+                                WHERE pr.pr_page IS NULL
+                                AND op.popcount > 2""".format(cachetable=self.cacheTable);
 
         # Query to check if a page is deleted
         # (necessary to make sure we're skipping pages that appear to exist but don't)
@@ -268,7 +269,7 @@ class OpentaskShort:
                               self.sizeLimit)); # size limit
             deletedPages = [];
             for (pageId,) in dbCursor:
-                deletedPages.append(pageId);
+                deletedPages.append((pageId,));
             if self.verbose:
                 sys.stderr.write(u"Info: found {n} pages to be deleted from the cache\n".format(n=len(deletedPages)));
 
@@ -390,9 +391,10 @@ class OpentaskShort:
         if self.verbose:
             sys.stderr.write(u"Info: got {n} pages from the cache, sorting and updating...\n".format(n=len(popQualData)));
 
-        # sort by popularity (views/day)
+        # sort by popularity (views/day), descending
         sortedPages = sorted(popQualData,
-                             key=lambda pageData: pageData['popcount']);
+                             key=lambda pageData: pageData['popcount'],
+                             reverse=True);
 
         # until we have picked self.nPages,
         # check each of the pages in the list
