@@ -25,6 +25,7 @@ Boston, MA  02110-1301, USA.
 import os;
 import sys;
 import re;
+import random;
 
 from datetime import datetime;
 
@@ -74,6 +75,10 @@ class OpentaskShort:
         self.dbHost = "enwiki-p.userdb.toolserver.org";
         self.dbName = "enwiki_p";
         self.cacheTable = "u_nettrom.opentask_short";
+
+        # Regular expression to match optional pre-text and post-text
+        # noinclude sections
+        self.noincludeRegex = re.compile(ur"""<noinclude>.*?</noinclude>""", re.DOTALL);
 
         self.taskUpdater = OpenTaskUpdater(verbose=self.verbose,
                                            lang=self.lang,
@@ -392,9 +397,13 @@ class OpentaskShort:
             sys.stderr.write(u"Info: got {n} pages from the cache, sorting and updating...\n".format(n=len(popQualData)));
 
         # sort by popularity (views/day), descending
-        sortedPages = sorted(popQualData,
-                             key=lambda pageData: pageData['popcount'],
-                             reverse=True);
+        # sortedPages = sorted(popQualData,
+        #                      key=lambda pageData: pageData['popcount'],
+        #                      reverse=True);
+
+        # sort by pseudo-random
+        sortedPages = popQualData;
+        random.shuffle(sortedPages);
 
         # until we have picked self.nPages,
         # check each of the pages in the list
@@ -439,7 +448,18 @@ class OpentaskShort:
         if self.verbose:
             sys.stderr.write(u"Info: got wikitext, updating...\n");
 
-        tasktext = wikitext;
+        noincludeFind = self.noincludeRegex.findall(tasktext);
+        if not noincludeFind:
+            sys.stderr.write(u"Info: no noinclude sections in the template source, someone messed with the wikitext?\n");
+            return False;
+        elif len(noincludeFind) != 2:
+            sys.stderr.write(u"Info: did not find two noinclude sections, someone messed with the wikitext?\n");
+            sys.stderr.write(u"Warning: aborting edit!\n");
+            return False;
+        else:
+            tasktext = u"{pre}{tasklist}{post}".format(pre=noincludeFind[0],
+                                                       tasklist=wikitext,
+                                                       post=noincludeFind[1]);
             
         if self.testRun:
             sys.stderr.write(u"Info: Running a test, printing out new wikitext:\n\n");
