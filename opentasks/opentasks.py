@@ -138,8 +138,31 @@ class OpenTaskUpdater:
 		if taskDef:
 			self.taskDef = taskDef;
 		else:
+			# FIXME: wikify is now deleted.  Suggest having the following
+			# templates and associated categories take over for it:
+			# {{dead end}}, {{inadequate lead}}, {{lead too short}}, 
+			# {{lead too long}}, {{underlinked}}, and {{overlinked}}
+			# requires rewriting to support multiple categories per task...
+
+			# {{inadequate lead}}, {{lead too short}}, and {{lead too long}}
+			# all add pages to the same category (Wikipedia introduction cleanup)
+
+			# Task def is a dictionary where keys are IDs of the span elements
+			# to which the list of pages will go.  Values are one of:
+			# 1: unicode string, name of category to grab pages from
+			# 2: list of unicode strings, names of categories,
+			#    pages will be grabbed randomly from all categories combined
+			#
+			# The name of a category can also be a tuple of the form
+			# ("use-subs", u"[category name]") which will indicate that
+			# we need to grab all sub-categories from the given category.
+			# Pages will then be grabbed randomly from all the sub-categories.
+
 			self.taskDef = {
-				"wikify": u"All articles that need to be wikified",
+				"wikify": [u"All dead-end pages",
+					   u"All articles with too few wikilinks",
+					   u"All articles with too many wikilinks",
+					   ("use-subs", "Wikipedia introduction cleanup")],
 				# "orphan": u"All orphaned articles",
 				"copyedit": u"All articles needing copy edit",
 				"update": u"All Wikipedia articles in need of updating",
@@ -211,6 +234,12 @@ class OpenTaskUpdater:
                                            AND page_namespace=?
                                            AND page_random >= RAND()
                                            ORDER BY page_random LIMIT ?""";
+
+		# Query to fetch all pages in a given namespace from a given category
+		self.getAllPagesQuery = u"""SELECT page_id, page_title
+                                            FROM page JOIN categorylinks ON page_id=cl_from
+                                            WHERE cl_to=?
+                                            AND page_namespace=?""";
 
 	def connectDatabase(self, hostName=None, dbName=None):
 		'''
@@ -339,7 +368,7 @@ class OpenTaskUpdater:
 	def findStubs(self, category=None, nPages=5):
 		"""
 		Use the database to pick a random stub category,
-		then pick a sufficient number of articles from that category.
+		then pick a sufficient number of pages from that category.
 		Expects a working database connection to exist as self.dbConn
 
 		@param category: The overarching stub category to find a random
@@ -400,17 +429,116 @@ class OpenTaskUpdater:
 
 		return foundPages;
 
-	def findPages(self, category=None, nPages=5):
+	def findAllPages(self, category=None):
+		"""
+		Use the database to fetch all main namespace pages from a given category.
+		Expects a working database connection to exist as self.dbConn
+
+		@param category: Name of the category to grab pages from
+		@type category: unicode
+		"""
+
+		if not category:
+			sys.stderr.write(u"Error: unable to find pages from a given category without a category name!\n");
+			return None;
+
+		if self.verbose:
+			sys.stderr.write(u"Info: finding all pages in category {cat}\n".format(cat=category).encode('utf-8'));
+
+		attempts = 0;
+		while attempts < self.maxDBQueryAttempts:
+			try:
+				foundPages = [];
+				dbCursor = self.dbConn.cursor();
+				dbCursor.execute(self.getAllPagesQuery,
+						 (re.sub(' ', '_', category).encode('utf-8'), # catname
+						  0) # ns
+						 );
+				for (pageId, pageTitle) in dbCursor:
+					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
+								  'utf-8', errors='strict'));
+			except oursql.Error, e:
+				attempts += 1;
+				sys.stderr.write("Error: Unable to execute query to get pages from this category, possibly retrying!\n");
+				sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
+				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
+					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
+					# lost connection, reconnect
+					self.connectDatabase();
+			else:
+				break;
+		if attempts >= self.maxDBQueryAttempts:
+			sys.stderr.write(u"Error: Exhausted number of query attempts!\n");
+		elif self.verbose:
+			sys.stderr.write(u"Info: found {n} pages in this category.\n".format(n=len(foundPages)).encode('utf-8'));
+
+		return foundPages;
+
+	def findSubcategoryPages(self, category=None):
+		"""
+		Use the database to retrieve all direct descendant sub-categories
+		of the given category.  Then find all pages in all the sub-categories
+		and return the union of all of them
+
+		@param category: Name of the category to grab sub-category pages from
+		@type category: unicode
+		"""
+
+		if not category:
+			sys.stderr.write(u"Error: unable to find sub-categories in a given category without a category name!\n");
+			return None;
+
+		if self.verbose:
+			sys.stderr.write(u"Info: finding all pages from direct descendants of category {cat}\n".format(cat=category).encode('utf-8'));
+
+		subCategories = [];
+		attempts = 0;
+		while attempts < self.maxDBQueryAttempts:
+			try:
+				dbCursor = self.dbConn.cursor();
+				dbCursor.execute(self.getAllPagesQuery,
+						 (re.sub(' ', '_', category).encode('utf-8'), # catname
+						  14) # ns (14=Category)
+						 );
+				for (pageId, pageTitle) in dbCursor:
+					subCategories.append(unicode(re.sub('_', ' ', pageTitle),
+								     'utf-8', errors='strict'));
+			except oursql.Error, e:
+				attempts += 1;
+				sys.stderr.write("Error: Unable to execute query to get sub-categories from this category, possibly retrying!\n");
+				sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
+				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
+					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
+					# lost connection, reconnect
+					self.connectDatabase();
+			else:
+				break;
+		if attempts >= self.maxDBQueryAttempts:
+			sys.stderr.write(u"Error: Exhausted number of query attempts!\n");
+			return [];
+		elif self.verbose:
+			sys.stderr.write(u"Info: found {n} sub-categories in this category.\n".format(n=len(subCategories)).encode('utf-8'));
+		
+		foundPages = set();
+		for categoryName in subCategories:
+			subCatPages = self.findAllPages(category=categoryName);
+			if subCatPages:
+				foundPages = foundPages.union(subCatPages);
+
+		return foundPages;
+
+	def findRandomPages(self, category=None, nPages=5):
 		"""
 		Use the database to pick a number of pages from a given category.
 		Expects a working database connection to exist as self.dbConn
 
-		@param category: Name of the category to grab articles from
+		@param category: Name of the category to grab pages from
 		@type category: unicode
 
 		@param nPages: number of pages to fetch
 		@type nPages: int
 		"""
+
 		if not category:
 			sys.stderr.write(u"Error: unable to find pages without a category to pick from\n");
 			return [];
@@ -447,6 +575,49 @@ class OpenTaskUpdater:
 			sys.stderr.write(u"Info: found {n} tasks from this category.\n".format(n=len(foundPages)).encode('utf-8'));
 
 		return foundPages;
+
+
+	def findPages(self, category=None, nPages=5):
+		"""
+		Pick a number of pages from a given category definition through
+		sub-methods that access the database.
+
+		@param category: Category-definition of where to grab pages from
+		@type category: unicode
+
+		@param nPages: number of pages to fetch
+		@type nPages: int
+		"""
+
+		if not category:
+			sys.stderr.write(u"Error: unable to find pages without a category defition to pick from\n");
+			return [];
+
+		if isinstance(category, unicode):
+			return self.findRandomPages(category=category,
+						    nPages=nPages);
+		else:
+			# Create a set of all pages we find,
+			# from which we'll randomly sample.
+			foundPages = set();
+			if isinstance(category, list):
+				for catName in category:
+					if isinstance(catName, unicode):
+						foundPages = foundPages.union(self.findAllPages(category=catName));
+					elif isinstance(catName, tuple):
+						# Category name is the second element
+						foundPages = foundPages.union(self.findSubcategoryPages(category=catName[1]));
+			elif isinstance(category, tuple):
+				# Category name is the second element
+				foundPages = self.findSubcategoryPages(category=category[1]);
+				
+		try:
+			# OK, return a random sample of size nPages:
+			return random.sample(foundPages, nPages);
+		except ValueError:
+			# Might happen if we have too few pages to sample,
+			# return the whole set.
+			foundPages;
 
 	def update(self):
 		"""
@@ -675,25 +846,25 @@ class OpenTaskUpdater:
 					sys.stderr.write(u"Error: Unable to connect to DB server {server} using DB {database} for logging\n".format(server=self.logDBHost, database=self.logDBName));
 				else:
 					timestamp = pywikibot.Timestamp.fromISOformat(taskpage.editTime());
-					with self.dbConn.cursor() as dbCursor:
-						for logData in logEntries:
-							try:
-								dbCursor.execute(logEntryQuery,
-										 (timestamp,
-										  logData['title'].encode('utf-8'),
-										  logData['length'],
-										  logData['taskcategory'],
-										  logData['assessedclass'],
-										  logData['predclass'],
-										  logData['quality'],
-										  logData['popcount'],
-										  logData['popularity'],
-										  logData['strategy']));
+#					with self.dbConn.cursor() as dbCursor:
+#						for logData in logEntries:
+#							try:
+								# dbCursor.execute(logEntryQuery,
+								# 		 (timestamp,
+								# 		  logData['title'].encode('utf-8'),
+								# 		  logData['length'],
+								# 		  logData['taskcategory'],
+								# 		  logData['assessedclass'],
+								# 		  logData['predclass'],
+								# 		  logData['quality'],
+								# 		  logData['popcount'],
+								# 		  logData['popularity'],
+								# 		  logData['strategy']));
 							# NOTE: Consider catching something else than oursql.Error,
 							# that also catches warnings.
-  							except oursql.Error, e:
-								sys.stderr.write("Error: Unable to insert log entry!\n");
-								sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
+ # 							except oursql.Error, e:
+#								sys.stderr.write("Error: Unable to insert log entry!\n");
+#								sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
 
 		# OK, all done
 		if self.verbose:
@@ -707,7 +878,7 @@ class OpenTaskUpdater:
 	def selectSubset(self, pageList=[], nPages=5, replacePattern=None):
 		"""
 		Expects a list of pages of length greater than self.numPages, from
-		which we will self.numPages articles based on some criteria.
+		which we will pick self.numPages pages based on some criteria.
 
 		@param pageList: page titles we'll want to select a subset from
 		@type pageList: list
@@ -832,7 +1003,7 @@ def main():
 	cli_parser.add_argument('-n', '--numpages', default=5,
 				help="number of pages displayed in each task category (default: 5)");
 
-	# Option to control the number of oversampled articles
+	# Option to control the number of oversampled pages
 	# when selecting based on popularity and quality
 	cli_parser.add_argument('-o', '--oversample', default=20, type=int,
 				help="multiplication factor used for oversampling and selection by popularity and quality. (a value of '1' turns it off)");
