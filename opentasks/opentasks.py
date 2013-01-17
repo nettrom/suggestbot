@@ -846,25 +846,27 @@ class OpenTaskUpdater:
 					sys.stderr.write(u"Error: Unable to connect to DB server {server} using DB {database} for logging\n".format(server=self.logDBHost, database=self.logDBName));
 				else:
 					timestamp = pywikibot.Timestamp.fromISOformat(taskpage.editTime());
-#					with self.dbConn.cursor() as dbCursor:
-#						for logData in logEntries:
-#							try:
-								# dbCursor.execute(logEntryQuery,
-								# 		 (timestamp,
-								# 		  logData['title'].encode('utf-8'),
-								# 		  logData['length'],
-								# 		  logData['taskcategory'],
-								# 		  logData['assessedclass'],
-								# 		  logData['predclass'],
-								# 		  logData['quality'],
-								# 		  logData['popcount'],
-								# 		  logData['popularity'],
-								# 		  logData['strategy']));
+					with self.dbConn.cursor() as dbCursor:
+						for logData in logEntries:
+							try:
+								if logData['title']:
+									logData['title'] = logData['title'].encode('utf-8');
+								dbCursor.execute(logEntryQuery,
+										 (timestamp,
+										  logData['title'],
+										  logData['length'],
+										  logData['taskcategory'],
+										  logData['assessedclass'],
+										  logData['predclass'],
+										  logData['quality'],
+										  logData['popcount'],
+										  logData['popularity'],
+										  logData['strategy']));
 							# NOTE: Consider catching something else than oursql.Error,
 							# that also catches warnings.
- # 							except oursql.Error, e:
-#								sys.stderr.write("Error: Unable to insert log entry!\n");
-#								sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
+ 							except oursql.Error, e:
+								sys.stderr.write("Error: Unable to insert log entry!\n");
+								sys.stderr.write("Error {0}: {1}\n".format(e.args[0], e.args[1]));
 
 		# OK, all done
 		if self.verbose:
