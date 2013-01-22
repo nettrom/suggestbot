@@ -134,18 +134,16 @@ class OpenTaskUpdater:
 		if taskPage:
 			self.taskPage = taskPage;
 
-		# FIXME: switch to newer task list with fewer categories.
 		if taskDef:
 			self.taskDef = taskDef;
 		else:
-			# FIXME: wikify is now deleted.  Suggest having the following
-			# templates and associated categories take over for it:
-			# {{dead end}}, {{inadequate lead}}, {{lead too short}}, 
-			# {{lead too long}}, {{underlinked}}, and {{overlinked}}
-			# requires rewriting to support multiple categories per task...
+			# Wikify is deleted, the following templates and associated
+			# categories take over for it:
+			# {{dead end}}, {{underlinked}}, and {{overlinked}}
 
-			# {{inadequate lead}}, {{lead too short}}, and {{lead too long}}
-			# all add pages to the same category (Wikipedia introduction cleanup)
+			# "leadcleanup" refers to "Category:Wikipedia introduction cleanup"
+			# where amongst others, {{inadequate lead}}, {{lead too short}},
+			# and {{lead too long}} end up
 
 			# Task def is a dictionary where keys are IDs of the span elements
 			# to which the list of pages will go.  Values are one of:
@@ -161,21 +159,22 @@ class OpenTaskUpdater:
 			self.taskDef = {
 				"wikify": [u"All dead-end pages",
 					   u"All articles with too few wikilinks",
-					   u"All articles with too many wikilinks",
-					   ("use-subs", "Wikipedia introduction cleanup")],
-				# "orphan": u"All orphaned articles",
+					   u"All articles with too many wikilinks"],
+				"leadcleanup": ("use-subs", "Wikipedia introduction cleanup"),
+
 				"copyedit": u"All articles needing copy edit",
 				"update": u"All Wikipedia articles in need of updating",
-				# "style" : u"All articles needing style editing",
 				"translate": u"Wikipedia articles needing cleanup after translation",
-				"cleanup": u"All pages needing cleanup",
 				"verify": u"All pages needing factual verification",
-				# "npov": u"All NPOV disputes",
 				"or" : u"All articles that may contain original research",
+				"stub" : u"Stub categories",
 				# "merge": u"All articles to be merged",
 				# "split": u"All articles to be split",
 				# "expand" : u"All articles to be expanded",
-				"stub" : u"Stub categories",
+				# "npov": u"All NPOV disputes",
+				# "cleanup": u"All pages needing cleanup",
+				# "style" : u"All articles needing style editing",
+				# "orphan": u"All orphaned articles",
 				# "afdrelist" : {
 				#	"catname": u"Relisted AfD debates",
 				#	"pattern": u"Articles_for_deletion/%", # filter
