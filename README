@@ -15,9 +15,10 @@ opentasks/logtable.sql
   MySQL table definition for log data on pages that were selected.
 
 opentasks/opentask-short-3.py
-  Python script to update a newer version of the template with
-  short lists of tasks.  Uses three categories and a list format,
-  with random sampling and tests for page protection and recent deletion.
+  Python script to update templates necessary for v2 of GettingStarted.
+  Uses three categories and a list format, with one template pages for
+  each category.  Page sampling is done randomly, candidate pages are
+  tested for page protection and recent deletion.
 
 opentasks/opentask-short.py
   Python script to update a template with a (short) list of tasks
