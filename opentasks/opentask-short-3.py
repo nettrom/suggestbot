@@ -64,6 +64,10 @@ class OpentaskShort:
         self.taskDef = {"copyedit": u"All articles needing copy edit",
                         "clarify": u"All Wikipedia articles needing clarification",
                         "wikilinks": u"All articles with too few wikilinks"};
+        # Which pages we edit for each of the tasks
+        self.templatePages = {"copyedit": u"Template:Gettingstarted copyediting",
+                              "clarify": u"Template:Gettingstarted clarification",
+                              "wikilinks": u"Template:Gettingstarted adding links"};
         
         self.nPages = nPages;
         self.sizeLimit = sizeLimit;
@@ -154,6 +158,96 @@ class OpentaskShort:
             sys.stderr.write(u"Info: found {n} tasks from this category.\n".format(n=len(foundPages)).encode('utf-8'));
 
         return foundPages;
+
+    def savePage(self, site=None, taskId=None, taskList=[]):
+        """
+        Update the template page associated with the given task ID.
+
+        @param site: Pywikibot Site object for the Wikipedia we're updating on
+        @type site: pywikibot.Site
+
+        @param taskId: ID of the task we're updating for (e.g. "copyedit")
+        @type taskId: unicode
+
+        @param taskList: list of page titles to be shown for the given task
+        @type taskList: list (of unicode)
+        """
+
+        if not site \
+                or not taskId \
+                or not taskId in self.templatePages:
+            return False;
+
+        taskPageTitle = self.templatePages[taskId];
+
+        # get current page text
+        tasktext = None;
+        try:
+            taskPageObj = pywikibot.Page(site, taskPageTitle);
+            tasktext = taskPageObj.get();
+        except pywikibot.exceptions.NoPage:
+            sys.stderr.write(u"Warning: Task page {title} does not exist, aborting!\n".format(title=taskPageTitle).encode('utf-8'));
+        except pywikibot.exceptions.IsRedirectPage:
+            sys.stderr.write(u"Warning: Task page {title} is a redirect, aborting!\n".format(title=taskPageTitle).encode('utf-8'));
+        except pywikibot.data.api.TimeoutError:
+            sys.stderr.write(u"Error: API request to {lang}-WP timed out, unable to get wikitext of {title}, cannot continue!\n".format(lang=self.lang, title=taskPageTitle));
+
+        if tasktext is None:
+            return False;
+
+        if self.verbose:
+            sys.stderr.write(u"Info: got wikitext from {title}, updating...\n".format(title=taskPageTitle));
+
+        oldTasktext = tasktext;
+
+        # Matches beginning unordered list, grabs the ID as
+        # a matching group
+        ulStartRegex = re.compile('\s*<ul id="([^"]+)"');
+
+        taskLines = tasktext.split("\n");
+        for i in range(len(taskLines)):
+            lineMatch = ulStartRegex.match(taskLines[i]);
+            if lineMatch:
+                foundTaskId = lineMatch.group(1);
+                # is it the right task ID?
+                if not foundTaskId == taskId:
+                    continue;
+
+                # OK, replace
+                for j in range(len(taskList)):
+                    taskLines[(i+1)+j] = u"\t\t<li>{title}</li>".format(title=pywikibot.Page(site, taskList[j]).title(asLink=True));
+
+        # Re-assemble
+        tasktext = "\n".join(taskLines);
+
+        if oldTasktext == tasktext:
+            sys.stderr.write(u"Warning: replacing tasks for task ID '{taskid}' on page {title} resulted in no change, not the right task ID?\n".format(taskid=taskId, title=taskPageObj.title()));
+            return True;
+            
+        if self.testRun:
+            sys.stderr.write(u"Info: Running a test, printing out new wikitext:\n\n");
+            print tasktext.encode('utf-8');
+        else:
+            if self.verbose:
+                sys.stderr.write(u"Info: Saving page with new text\n");
+            taskPageObj.text = tasktext;
+            try:
+                taskPageObj.save(comment=self.editComment);
+            except pywikibot.exceptions.EditConflict:
+                sys.stderr.write(u"Error: Saving page {title} failed, edit conflict.\n".format(title=taskPageObj.title()).encode('utf-8'));
+                return False;
+            except pywikibot.exceptions.PageNotSaved as e:
+                sys.stderr.write(u"Error: Saving page {title} failed.\nError: {etext}\n".format(title=taskPageObj.title(), etext=e).encode('utf-8'));
+                return False;
+            except pywikibot.data.api.TimeoutError:
+                sys.stderr.write(u"Error: Saving page {title} failed, API request timeout fatal\n".format(title=taskPageObj.title()).encode('utf-8'));
+                return False
+
+        # OK, all done
+        if self.verbose:
+            sys.stderr.write(u"Info: List of open tasks on {title} successfully updated!\n".format(title=taskPageObj.title()));
+                
+        return True;
         
     def update(self):
         """
@@ -216,65 +310,11 @@ class OpentaskShort:
 
                     # OK, move to next candidate
                     i += 1;
-        
-        # get current page text
-        tasktext = None;
-        try:
-            taskpage = pywikibot.Page(wikiSite, self.taskPage);
-            tasktext = taskpage.get();
-        except pywikibot.exceptions.NoPage:
-            sys.stderr.write(u"Warning: Task page {title} does not exist, aborting!\n".format(title=self.taskPage).encode('utf-8'));
-        except pywikibot.exceptions.IsRedirectPage:
-            sys.stderr.write(u"Warning: Task page {title} is a redirect, aborting!\n".format(title=self.taskPage).encode('utf-8'));
-        except pywikibot.data.api.TimeoutError:
-            sys.stderr.write(u"Error: API request to {lang}-WP timed out, unable to get wikitext of {title}, cannot continue!\n".format(lang=self.lang, title=self.taskPage));
+                    
+        # for each task, update pages
+        for (taskId, taskList) in pickedPages.iteritems():
+            self.savePage(site=wikiSite, taskId=taskId, taskList=taskList);
 
-        if tasktext is None:
-            return False;
-
-        if self.verbose:
-            sys.stderr.write(u"Info: got wikitext, updating...\n");
-
-        # Matches beginning unordered list, grabs the ID as
-        # a matching group
-        ulStartRegex = re.compile('\s*<ul id="([^"]+)"');
-
-        taskLines = tasktext.split("\n");
-        for i in range(len(taskLines)):
-            lineMatch = ulStartRegex.match(taskLines[i]);
-            if lineMatch:
-                taskId = lineMatch.group(1);
-                # do we know this task ID?
-                if not taskId in pickedPages:
-                    continue;
-
-                # OK, replace
-                pageList = pickedPages[taskId];
-                for j in range(len(pageList)):
-                    taskLines[(i+1)+j] = u"      <li>{title}</li>".format(title=pywikibot.Page(wikiSite, pageList[j]).title(asLink=True));
-
-        # Re-assemble
-        tasktext = "\n".join(taskLines);
-            
-        if self.testRun:
-            sys.stderr.write(u"Info: Running a test, printing out new wikitext:\n\n");
-            print tasktext.encode('utf-8');
-        else:
-            if self.verbose:
-                sys.stderr.write(u"Info: Saving page with new text\n");
-            taskpage.text = tasktext;
-            try:
-                taskpage.save(comment=self.editComment);
-            except pywikibot.exceptions.EditConflict:
-                sys.stderr.write(u"Error: Saving page {title} failed, edit conflict.\n".format(title=self.taskPage).encode('utf-8'));
-                return False;
-            except pywikibot.exceptions.PageNotSaved as e:
-                sys.stderr.write(u"Error: Saving page {title} failed.\nError: {etext}\n".format(title=self.taskPage, etext=e).encode('utf-8'));
-                return False;
-            except pywikibot.data.api.TimeoutError:
-                sys.stderr.write(u"Error: Saving page {title} failed, API request timeout fatal\n".format(title=self.taskPage).encode('utf-8'));
-                return False
-            
         # OK, all done
         if self.verbose:
             sys.stderr.write("Info: List of open tasks successfully updated!\n");
