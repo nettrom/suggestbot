@@ -1,4 +1,3 @@
--- FIXME: Remove this line before committing to bitbucket
 USE p50380g50553__ilc;
 
 -- Format of the inlink count table used by links-server.py
@@ -13,10 +12,11 @@ CREATE TABLE inlinkcount_updates (
        ilcu_update_running BIT(1) DEFAULT 0 -- set if this wiki is currently being updated
 ) ENGINE=InnoDB
 
--- Insert default values for en on s1
+-- Insert default values for English Wikipedia where that is hosted
 INSERT INTO inlinkcount_updates
 VALUES ('en', NULL)
 
--- Insert default values for no, sv, and pt on that shard
+-- Insert default values for Norwegian, Swedish, and Portuguese
+-- where those are hosted.
 INSERT INTO inlinkcount_updates
 VALUES ('no', NULL), ('sv', NULL), ('pt', NULL);
