@@ -1,0 +1,16 @@
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Crontab entries for SuggestBot
+
+# Redirects stderr to an error file in our home dir to catch errors,
+# and redirect stdout to /dev/null because the shell scripts
+# are set up to redirect stderr and stdout to files themselves.
+
+# Jobs updating inlink count tables
+# Run every morning for nowiki, svwiki, ptwiki
+14 1 * * * qsub $HOME/link-rec/update_linkcounts.sh no 2>$HOME/crontab-errors.txt >/dev/null
+14 2 * * * qsub $HOME/link-rec/update_linkcounts.sh sv 2>$HOME/crontab-errors.txt >/dev/null
+14 3 * * * qsub $HOME/link-rec/update_linkcounts.sh pt 2>$HOME/crontab-errors.txt >/dev/null
+
+# Run once a week for enwiki
+14 4 * * 4 qsub $HOME/link-rec/update_linkcounts.sh en 2>$HOME/crontab-errors.txt >/dev/null
