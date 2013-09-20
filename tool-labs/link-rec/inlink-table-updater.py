@@ -36,10 +36,11 @@ from __future__ import with_statement;
 import MySQLdb;
 from MySQLdb import cursors;
 
-import time;
 import sys;
 import os;
 import re;
+
+import logging;
 
 from datetime import datetime;
 
@@ -84,20 +85,30 @@ class InlinkTableUpdater:
         # Table name of the update table w/last update timestamp
         self.ilcUpdateTableName = "p50380g50553__ilc.inlinkcount_updates";
 
+        # Table name of the temporary table which will hold updated
+        # inlink counts for a later quick update join with the ILC table
+        self.ilcTempTableName = "p50380g50553__ilc.ilctemp";
+
         # Table names of the inlink count tables, database names,
         # and host names, for the languages that we support.
         self.ilcTableNames = {'en': 'p50380g50553__ilc.enwiki_inlinkcounts',
                               'no': 'p50380g50553__ilc.nowiki_inlinkcounts',
                               'sv': 'p50380g50553__ilc.svwiki_inlinkcounts',
-                              'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts'};
+                              'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts',
+                              'hu': 'p50380g50553__ilc.huwiki_inlinkcounts',
+                              'fa': 'p50380g50553__ilc.fawiki_inlinkcounts'};
         self.wikidbNames = {'en': 'enwiki_p',
                             'no': 'nowiki_p',
                             'sv': 'svwiki_p',
-                            'pt': 'ptwiki_p'};
+                            'pt': 'ptwiki_p',
+                            'hu': 'huwiki_p',
+                            'fa': 'fawiki_p',};
         self.hostnames = {'en': 'enwiki.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
-                          'pt': 'ptwiki.labsdb'};
+                          'pt': 'ptwiki.labsdb',
+                          'hu': 'huwiki.labsdb',
+                          'fa': 'fawiki.labsdb'};
 
     def dbConnect(self):
         '''
@@ -180,6 +191,18 @@ class InlinkTableUpdater:
         Update the inlink count table for the given language.
         '''
 
+        # Query to create the temporary table used for updating
+        createTempTableQuery = ur'''CREATE TEMPORARY TABLE
+                                    {ilcTempTable}
+                                    LIKE
+                                    {ilcTableName}''';
+
+        # Query to update the ILC table using values from the temporary table
+        updateFromTempQuery = ur'''UPDATE {ilcTableName} ilc,
+                                   {ilcTempTable} ilc_temp
+                                   SET ilc.ilc_numlinks=ilc_temp.ilc_numlinks
+                                   WHERE ilc.ilc_page_id=ilc_temp.ilc_page_id''';
+
         # Query to find articles that need to be deleted, the left join
         # means p.page_id is null for those pages.  This can take a little
         # while for large wikis.
@@ -200,34 +223,39 @@ class InlinkTableUpdater:
               AND p.page_is_redirect=0
               AND ilc.ilc_page_id IS NULL'''.format(ilcTableName=self.ilcTableNames[self.lang]);
 
-        # Query to find linked articles (namespace 0) from a given page ID
-        getLinksQuery = ur'''SELECT p.page_id AS pageid
+        # Query to find linked articles (namespace 0) from a given set of page IDs
+        getLinksQuery = ur'''SELECT p.page_id, p.page_is_redirect
                              FROM pagelinks pl JOIN page p
                              ON (pl.pl_namespace=p.page_namespace
                              AND pl.pl_title=p.page_title)
                              WHERE pl.pl_namespace=0
-                             AND pl.pl_from=%(pageid)s''';
+                             AND pl.pl_from IN ({pageidlist})
+                             GROUP BY p.page_id''';
 
-        # Query to find the inlink count for a specific set of pages.
-        getLinkCountQuery = ur'''SELECT
-              p.page_id, COUNT(*) AS numlinks
-              FROM page p JOIN pagelinks pl ON
-              (p.page_namespace=pl.pl_namespace AND p.page_title=pl.pl_title)
-              JOIN page p2 ON pl.pl_from=p2.page_id
-              WHERE p.page_id IN ({idlist})
-              AND p2.page_namespace=0
-              GROUP BY p.page_id''';
+        # Query to resolve redirects (we discard double-redirects)
+        resolveRedirectQuery = ur'''SELECT p.page_id, p.page_is_redirect
+                                    FROM redirect r JOIN page p
+                                    ON (r.rd_namespace=p.page_namespace
+                                    AND r.rd_title=p.page_title)
+                                    WHERE p.page_namespace=0
+                                    AND rd_from IN ({pageidlist})''';
+
+        # Query to insert a set of articles with their inlink count
+        # into an ILC table
+        insertSetQuery = ur'''INSERT INTO {ilcTableName}
+                              SELECT
+                              p.page_id AS ilc_page_id,
+                              COUNT(*) AS ilc_numlinks
+                              FROM page p JOIN pagelinks pl ON
+                             (p.page_namespace=pl.pl_namespace AND p.page_title=pl.pl_title)
+                              JOIN page p2 ON pl.pl_from=p2.page_id
+                              WHERE p.page_id IN ({idlist})
+                              AND p2.page_namespace=0
+                              GROUP BY p.page_id''';
 
         # Query to delete a page from the inlink count table
         deletePageQuery = ur'''DELETE FROM {ilcTableName}
-              WHERE ilc_page_id=%s'''.format(ilcTableName=self.ilcTableNames[self.lang]);
-
-        # Query to insert a new page into the inlink count table,
-        # this uses a MySQL/MariaDB extension to SQL to update if the page exists
-        insertPageQuery = ur'''INSERT INTO {ilcTableName}
-              VALUES (%(pageid)s, %(numlinks)s)
-              ON DUPLICATE KEY
-              UPDATE ilc_numlinks=%(numlinks)s'''.format(ilcTableName=self.ilcTableNames[self.lang]);
+                               WHERE ilc_page_id IN ({idlist})''';
 
         # Query to get the last update timestamp from the database
         getLastupdateQuery = ur'''SELECT ilcu_timestamp
@@ -263,8 +291,7 @@ class InlinkTableUpdater:
                                         ORDER BY rc.rc_timestamp DESC
                                         LIMIT 1''';
 
-        if self.verbose:
-            sys.stderr.write("Info: {timestamp} finding pages to delete\n".format(timestamp=datetime.utcnow()));
+        logging.info("Finding pages to delete".format(timestamp=datetime.utcnow()));
 
         # 1: find pages that need to be deleted, and delete them
         self.dbCursor.execute(findDeletedPagesQuery);
@@ -272,25 +299,27 @@ class InlinkTableUpdater:
         # There shouldn't be too many pages that need to be deleted every time,
         # so we can just do a list comprehension to make a list of tuples we
         # can feed to executemany().
-        changedPages = [(row['ilc_page_id'],) for row in self.dbCursor.fetchall()];
+        pagesToDelete = [str(row['ilc_page_id']) for row in self.dbCursor.fetchall()];
 
-        if self.verbose:
-            sys.stderr.write("Info: found %d pages to delete.\n" % (len(changedPages),));
+        logging.info("Found {n} pages to delete.".format(n=len(pagesToDelete)));
 
-        if len(changedPages) > 0:
-            self.dbCursor.executemany(deletePageQuery, changedPages);
-            if self.verbose:
-                sys.stderr.write("Info: deleted %d rows.\n" % (self.dbCursor.rowcount,));
-            self.dbConn.commit(); # commit changes
+        i = 0;
+        while i < len(pagesToDelete):
+            self.dbCursor.execute(deletePageQuery.format(ilcTableName=self.ilcTableNames[self.lang], idlist=",".join(pagesToDelete[i:i+self.sliceSize])));
+            logging.info("Deleted {n} rows.".format(n=self.dbCursor.rowcount));
 
-        if self.verbose:
-            sys.stderr.write("Info: {timestamp} completed page deletion, finding new pages...\n".format(timestamp=datetime.utcnow()));
+            i += self.sliceSize;
+
+        self.dbConn.commit(); # commit changes
+        pagesToDelete = None; # this can be cleaned up...
+
+        logging.info("Completed page deletion, finding and inserting new articles...");
 
         # 2: Find pages that need to be created, add those to our set of pages that
         #    need updating.
         self.dbCursor.execute(findNewPagesQuery);
 
-        pagesToUpdate = set();
+        pagesToInsert = set();
         done = False;
         while not done:
             row = self.dbCursor.fetchone();
@@ -298,12 +327,31 @@ class InlinkTableUpdater:
                 done = True;
                 continue;
 
-            pagesToUpdate.add(row['page_id']);
-        
-        if self.verbose:
-            sys.stderr.write("Info: {timestamp} found {n} new pages, added to update list.\n".format(timestamp=datetime.utcnow(), n=len(pagesToUpdate)));
+            pagesToInsert.add(row['page_id']);
 
-        # 3: Find pages that have been updated since our last update
+        # 2.1 Listify pagesToUpdate, iterate over slices and insert
+        #     the pages into the ILC table.
+        logging.info("Inserting {n} articles to the ILC table".format(n=len(pagesToInsert)));
+
+        # Build a list of strings we can join before executing the query
+        pagesToInsert = [str(pageId) for pageId in pagesToInsert];
+        i = 0;
+        while i < len(pagesToInsert):
+            self.dbCursor.execute(insertSetQuery.format(ilcTableName=self.ilcTableNames[self.lang],
+                                                        idlist=",".join(pagesToInsert[i:i+self.sliceSize])));
+
+            i += self.sliceSize;
+            if i % self.commitSize == 0:
+                logging.info("Commiting {n} article inserts".format(n=self.commitSize));
+                self.dbConn.commit();
+
+        # Commit any non-commited inserts
+        self.dbConn.commit();
+
+        pagesToInsert = None;
+        logging.info("Done inserting pages, looking for other articles to update");
+
+        # 3: Find articles that have been updated since our last update
 
         # Get timestamp of last update
         self.dbCursor.execute(getLastupdateQuery,
@@ -321,8 +369,7 @@ class InlinkTableUpdater:
 
         if lastUpdatetime is None:
             # Grab the latest main namespace update from recentchanges.
-            # Keep changedPages an empty list, since pagesToUpdate should
-            # be all articles we need to update anyway.
+            # Keep changedPages an empty list, no pages to update.
             self.dbCursor.execute(getMostRecentchangeQuery);
             row = self.dbCursor.fetchone();
             self.dbCursor.fetchall(); # flush cursor
@@ -344,65 +391,82 @@ class InlinkTableUpdater:
                 if rcTime > newUpdateTime:
                     newUpdateTime = rcTime;
 
-            if self.verbose:
-                sys.stderr.write("Info: {timestamp} found {n} changed pages, grabbing links from them.\n".format(timestamp=datetime.utcnow(), n=len(changedPages)));
+            logging.info("Found {n} changed articles, grabbing links from them".format(n=len(changedPages)));
 
         # For each of the recently changed pages, grab the page IDs of the pages
         # they link to and add that to our pages in need of updating.
         # (Our basic assumption is that this takes less time than grabbing text
         #  and diffing to find the exact link added/removed)
-        for pageID in changedPages:
-            self.dbCursor.execute(getLinksQuery,
-                                  {'pageid': pageID});
+        pagesToUpdate = set();
+        redirectsToResolve = set();
+        i = 0;
+        while i < len(changedPages):
+            idlist = [str(pageid) for pageid in changedPages[i:i+self.sliceSize]];
+            self.dbCursor.execute(getLinksQuery.format(pageidlist=u",".join(idlist)));
             # There's a reasonable limit to the number of articles and amount of
             # data retrieved, so fetchall() can be used.
             for row in self.dbCursor.fetchall():
-                pagesToUpdate.add(row['pageid']);
+                if row['page_is_redirect']:
+                    redirectsToResolve.add(row['page_id']);
+                else:
+                    pagesToUpdate.add(row['page_id']);
+
+            i += self.sliceSize;
 
         # This can now be cleaned up
         changedPages = None;
 
-        if self.verbose:
-            sys.stderr.write("Info: {timestamp} found {n} articles, starting inserting/updating\n".format(timestamp=datetime.utcnow(), n=len(pagesToUpdate)));
+        logging.info("Attempting to resolve {n} redirects...".format(n=len(redirectsToResolve)));
 
-        # 4: Iterate over all changed pages and insert/update their inlink counts
-        inlinkCount = 0;
-        dataToInsert = [];
-        pagesToUpdate = list(pagesToUpdate);
+        # Resolve single redirects, first listify it...
+        redirectsToResolve = [str(pageid) for pageid in redirectsToResolve];
+        i = 0;
+        while i < len(redirectsToResolve):
+            self.dbCursor.execute(resolveRedirectQuery.format(pageidlist=",".join(redirectsToResolve[i:i+self.sliceSize])));
+            for row in self.dbCursor.fetchall(): # <= 100 rows, fetchall's OK
+                if not row['page_is_redirect']:
+                    pagesToUpdate.add(row['page_id']);
+
+            i += self.sliceSize;
+
+        logging.info("Resolved redirects, found {n} articles in need of an update.".format(n=len(pagesToUpdate)));
+
+        # 4: Iterate over all changed pages and update their inlink counts
+        # 4.1: Create the temporary table
+        self.dbCursor.execute(createTempTableQuery.format(ilcTempTable=self.ilcTempTableName,
+                                                          ilcTableName=self.ilcTableNames[self.lang]));
+
+        # 4.2: listify and insert into the temporary table
+        pagesToUpdate = [str(pageId) for pageId in pagesToUpdate];
+
         i = 0;
         while i < len(pagesToUpdate):
-            # create a list of strings of size self.sliceSize
-            idList = [str(pageId) for pageId in pagesToUpdate[i:i+self.sliceSize]];
-            self.dbCursor.execute(getLinkCountQuery.format(idlist=",".join(idList)));
-            for row in self.dbCursor.fetchall():
-                # Add to pages
-                dataToInsert.append({'pageid': row['page_id'],
-                                     'numlinks': row['numlinks']});
+            # Insert into the temp table
+            self.dbCursor.execute(insertSetQuery.format(ilcTableName=self.ilcTempTableName,
+                                                        idlist=",".join(pagesToUpdate[i:i+self.sliceSize])));
 
-            # If we've grabbed links for a large enough number of articles,
-            # insert/update and commit
-            self.dbCursor.executemany(insertPageQuery,
-                                          dataToInsert);
-            dataToInsert = [];
             i += self.sliceSize;
 
             if i % self.commitSize == 0:
-                self.dbConn.commit();
-                if self.verbose:
-                    sys.stderr.write("Info: {timestamp} committed {n} articles...\n".format(timestamp=datetime.utcnow(), n=self.commitSize));
+                logging.info("Inserted {n} articles in the temp table.".format(n=self.commitSize));
 
+        logging.info("Done inserting articles, updating ILC table from temp table");
 
-        # Insert/update remaining articles and update the update timestamp
-        #self.dbCursor.executemany(insertPageQuery,
-        #                          dataToInsert);
+        # 4.3: Update the ILC table using the temp table and commit changes
+        self.dbCursor.execute(updateFromTempQuery.format(ilcTableName=self.ilcTableNames[self.lang],
+                                                         ilcTempTable=self.ilcTempTableName));
+        logging.info("Updated {n} rows in the master table, committing changes".format(n=self.dbCursor.rowcount));
+        self.dbConn.commit();
+        
+
+        # Update the last updated timestamp
         self.dbCursor.execute(setLastupdateQuery,
                               {'timestamp': newUpdateTime,
                                'lang': self.lang});
         self.dbConn.commit();
 
-        if self.verbose:
-            sys.stderr.write("Info: {timestamp} completed updating all pages\n".format(timestamp=datetime.utcnow()));
-
+        logging.info("Completed updating all articles");
+        
         # OK, we're done here
         return;
         
@@ -429,13 +493,20 @@ def main():
                           help="I can has kittehtalkzalot?");
 
     args = cli_parser.parse_args();
+
+    # Set logging parameters for this script
+    logLevel = logging.WARNING;
+    if args.verbose:
+        logLevel = logging.INFO;
+    logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s',
+                        level=logLevel);
     
     # Create the updater object for the language
-    myUpdater = InlinkTableUpdater(lang=args.lang, verbose=args.verbose,
+    myUpdater = InlinkTableUpdater(lang=args.lang,
                                    sliceSize=args.slice);
 
     if not myUpdater.dbConnect():
-        sys.stderr.write("ERROR: Unable to connect to user database, exiting!\n");
+        logging.error("Unable to connect to database {db} on {host}, exiting!".format(db=self.wikidbNames[self.lang], host=self.hostnames[self.lang]));
         return;
 
     try:
@@ -450,10 +521,12 @@ def main():
 
         myUpdater.clearUpdateStatus();
         myUpdater.dbDisconnect();
+        # NOTE: disconnecting deletes the temporary table, they are
+        #       on a per-connection basis in MySQL
     except UpdateRunningError:
-        sys.stderr.write("ERROR: An update is already running for this wiki, exiting\n");
+        logging.error("An update is already running for this wiki, exiting.");
     except UpdateTableError:
-        sys.stderr.write("ERROR: Failed to update the status table, exiting\n");
+        logging.error("Failed to update the status table, exiting.");
 
     # OK, done
     return;
