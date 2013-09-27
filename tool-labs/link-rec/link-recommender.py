@@ -31,6 +31,8 @@ import re;
 import math;
 import operator;
 
+import logging;
+
 import simplejson as json;
 
 import MySQLdb;
@@ -107,16 +109,22 @@ class LinkRecommender():
         self.dbNames = {'en': 'enwiki_p',
                         'no': 'nowiki_p',
                         'sv': 'svwiki_p',
-                        'pt': 'ptwiki_p'};
+                        'pt': 'ptwiki_p',
+                        'hu': 'huwiki_p',
+                        'fa': 'fawiki_p',};
         self.hostnames = {'en': 'enwiki.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
-                          'pt': 'ptwiki.labsdb'};
+                          'pt': 'ptwiki.labsdb',
+                          'hu': 'huwiki.labsdb',
+                          'fa': 'fawiki.labsdb'};
         # Table name of the inlink count table in our user database.
         self.tableNames = {'en': 'p50380g50553__ilc.enwiki_inlinkcounts',
                            'no': 'p50380g50553__ilc.nowiki_inlinkcounts',
                            'sv': 'p50380g50553__ilc.svwiki_inlinkcounts',
-                           'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts'};
+                           'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts',
+                           'hu': 'p50380g50553__ilc.huwiki_inlinkcounts',
+                           'fa': 'p50380g50553__ilc.fawiki_inlinkcounts'};
 
         self.dbConn = None;
         self.dbCursor = None;
@@ -132,23 +140,27 @@ class LinkRecommender():
             u'en': ur'January|February|March|April|May|June|July|August|September|October|November|December',
             u'no': ur'\d+\.[ _]+(:[Jj]anuar|[Ff]ebruar|[Mm]ars|[Aa]pril|[Mm]ai|[Jj]uni|[Jj]uli|[Aa]ugust|[Ss]eptember|[Oo]ktober|[Nn]ovember|[Dd]esember)',
             u'sv': ur'\d+\.[ _]+(:[Jj]anuari|[Ff]ebruari|[Mm]ars|[Aa]pril|[Mm]aj|[Jj]uni|[Jj]uli|[Aa]ugusti|[Ss]eptember|[Oo]ktober|[Nn]ovember|[Dd]ecember)',
-            u'pt': ur'\d+[ _]+de[ _]+(:[Jj]aneiro|[Ff]evereiro|[Mm]arço|[Aa]bril|[Mm]aio|[Jj]unho|[Jj]ulho|[Aa]gosto|[Ss]etembro|[Oo]utubro|[Nn]ovembro|[Dd]ezembro)'
+            u'pt': ur'\d+[ _]+de[ _]+(:[Jj]aneiro|[Ff]evereiro|[Mm]arço|[Aa]bril|[Mm]aio|[Jj]unho|[Jj]ulho|[Aa]gosto|[Ss]etembro|[Oo]utubro|[Nn]ovembro|[Dd]ezembro)',
+            u'hu': ur'Január|Február|Március|Április|Május|Június|Július|Augusztus|Szeptember|Október|November|December',
+            u'fa': 'دسامب|نوامب|اکتب|سپتامب|اوت|ژوئی|ژوئن|مه|آوریل|مارس|فوریه|ژانویه'
             };
 
         # Note: compatible with both ' '  and '_' as spaces
         self.lists = {
-            u'en': ur'[Ll]ist[ _]of[ _]',
-            u'no': ur'[Ll]iste[ _]over[ _]',
-            u'sv': ur'[Ll]ista[ _]över[ _]',
-            u'pt': ur'[Ll]ista[ _]de[ _]'
+            u'en': ur'^List[ _]of[ _]',
+            u'no': ur'^Liste[ _]over[ _]',
+            u'sv': ur'^Lista[ _]över[ _]',
+            u'pt': ur'^Lista[ _]de[ _]',
+            u'hu': ur'[ _]listája$',
+            u'fa': ur'^فهرست'
             };
 
         # Compile the regular expressions
         self.months_re = dict();
         self.lists_re = dict();
         for lang in self.months.keys():
-            self.months_re[lang] = re.compile(self.months[lang]);
-            self.lists_re[lang] = re.compile(self.lists[lang]);
+            self.months_re[lang] = re.compile(self.months[lang], re.U|re.I);
+            self.lists_re[lang] = re.compile(self.lists[lang], re.U|re.I);
 
         self.rec_map = dict();
         self.titleIdMap = {}; # map page_title to page_id
@@ -179,7 +191,7 @@ class LinkRecommender():
             return True;
 
         # is a list
-        if self.lists_re[self.lang].match(item):
+        if self.lists_re[self.lang].search(item):
             return True;
         
         # starting with a month name
@@ -468,10 +480,28 @@ def app(envir, start_response):
 #         u"Fender Stratocaster Ultra": 1,
 #         u"Strat Ultra": 1,
 #         };
-#     recommender = LinkRecommender(lang='en', nrecs=2500, verbose=True);
+#    testLang = u"en";
+
+    # testItems = {
+    #     u"Luis Hernández": 1,
+    #     u"Mexikói labdarúgó-válogatott": 1,
+    #     u"Labdarúgó": 1,
+    #     u"CA Boca Juniors": 1,
+    #     u"CF Monterrey": 1
+    #     }
+    # testLang = u"hu";
+
+    # testItems = {
+    #     u"باشگاه فوتبال بوکا جونیورز": 1,
+    #     u"فوتبال": 1,
+    #     u"زبان اسپانیایی": 1,
+    #     u"آرژانتین": 1};
+    # testLang = u"fa";
+
+#     recommender = LinkRecommender(lang=testLang, nrecs=2500, verbose=True);
 #     recommender.connect();
 #     recs = recommender.get_recs(item_map=testItems, \
-# 		param_map=dict({u'nrecs': 2500,u'lang': u'en'}));
+# 		param_map=dict({u'nrecs': 2500,u'lang': testLang}));
 #     recommender.close();
 #     print "Received %d recommendations." % (len(recs),);
 

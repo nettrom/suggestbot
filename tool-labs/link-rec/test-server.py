@@ -78,7 +78,23 @@ items_json = {"The Seems":1,"Ghost Whisperer (season 4)":1,"Indian cuisine":1,"S
 
 ##items_json = {u"Findus":1,u"Findus":1,u"Åhléns":1,u"Folkets Hus och Parker":1,u"Mustang (spårvagn)":1,u"Bräckelinjen":1,u"Lundby landskommun":1,u"Lundby landskommun":1,u"Lundby socken, Västergötland":1,u"Hisingsbron":1,u"Klippan, Göteborg":1,u"Hisingsbron":1,u"Ryttarens torvströfabrik":1,u"Rydals museum":1,u"Samuel Owen":1,u"Per Murén":1,u"William Lindberg":1,u"Robert Almström":1,u"David Otto Francke":1,u"William Chalmers":1,u"Alexander Keiller":1,u"Sven Erikson":1,u"Rydahls Manufaktur":1,u"Rydals Manufaktur":1,u"Rydals museum":1,u"Rydals museum":1,u"Rydals museum":1,u"Freedom Flotilla":1,u"Generalmönsterrulla":1,u"Generalmönstring":1,u"Julia Cæsar":1,u"Buskteater":1,u"Buskis":1,u"Persontåg":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Lia Schubert-van der Bergen":1,u"Johanna von Lantingshausen":1,u"Gustav Gustavsson av Wasa":1,u"Fredrika av Baden":1,u"Ulrika Eleonora von Berchner":1,u"Ulla von Höpken":1,u"Stig T. Karlsson":1,u"Tony Adams":1,u"Zofia Potocka":1,u"Lena Möller":1,u"Lena Möller":1,u"Novak Đoković":1,u"Historiska kartor över Stockholm":1,u"Afrikanska barbetter":1,u"Aldosteron":1,u"Cyklooxygenas":1,u"Isoenzym":1,u"Proenzym":1,u"Strix (släkte)":1,u"Simsnäppor":1,u"Salskrake":1,u"Jim Dine":1,u"Fostervatten":1,u"Svensk arkitektur":1,u"Kuba":1,u"Rune Gustafsson":1,u"Föreningen för Stockholms fasta försvar":1,u"Carl Johan Billmark":1,u"Carl Johan Billmark":1,u"Alfred Rudolf Lundgren":1,u"Alfred Bentzer":1,u"Svenska Brukarföreningen":1,u"Karl August Nicander":1,};
 
-params = {'lang': 'en',
+items_json = {
+    u"باشگاه فوتبال بوکا جونیورز": 1,
+    u"فوتبال": 1,
+    u"زبان اسپانیایی": 1,
+    u"آرژانتین": 1};
+testLang = u"fa";
+
+items_json = {
+    u"Luis Hernández": 1,
+    u"Mexikói labdarúgó-válogatott": 1,
+    u"Labdarúgó": 1,
+    u"CA Boca Juniors": 1,
+    u"CF Monterrey": 1
+    }
+testLang = u"hu";
+
+params = {'lang': testLang,
           'nrecs': 2500};
 
 querydata = {'items': json.dumps(items_json),
@@ -96,7 +112,8 @@ except httplib.HTTPException as e:
 print "Decoding data...";
 jsondata = u"";
 for line in response.readlines():
-    jsondata = "%s%s" % (jsondata, line,);
+    line = unicode(line, 'utf-8', errors='strict');
+    jsondata = u"{data}{newline}".format(data=jsondata, newline=line);
 
 # print "DEBUG: jsondata = ", jsondata;
 try:
@@ -109,4 +126,5 @@ except:
 itemlist = decoded_data['success'];
 
 print "%d items returned" % (len(itemlist),);
-print itemlist;
+for pageData in itemlist[:10]:
+    print pageData['item'].encode('utf-8');
