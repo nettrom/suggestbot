@@ -117,29 +117,27 @@ class RecFilter:
                                    FROM {lang}wiki_work_category_data
                                    WHERE title=%(title)s""".format(lang=lang);
 
-        # SQL query to update age for a user's previous recommendations
-        updateOldRecsQuery = ur"""UPDATE {logtable}
-                                  SET age=age+1
-                                  WHERE lang=%(lang)s
-                                  AND name=%(username)s""".format(logtable=self.config.getConfig('RECLOG_TABLE'));
-
         # SQL query to add recs to the log
         logRecQuery = ur"""INSERT INTO {logtable}
-                           (lang, name, title, rank, source)
-                           VALUES (%(lang)s, %(username)s, %(title)s,
-                           %(rank)s, %(source)s)""".format(logtable=self.config.getConfig('RECLOG_TABLE'));
-
-        # SQL query to delete old recommendations from the log
-        deleteOldRecsQuery = ur"""DELETE FROM {logtable}
-                                  WHERE lang=%(lang)s
-                                  AND name=%(username)s
-                                  AND age >= %(age)s""".format(logtable=self.config.getConfig('RECLOG_TABLE'));
+                           (lang, username, rectime)
+                           VALUES (%(lang)s, %(username)s, %(rectime)s)""".format(logtable=self.config.getConfig('user_recommendations'));
+                           
+                      ur"""INSERT INTO {logtable}
+                           VALUES (%(recsetid)s, %(title)s, %(category)s, %(rank)s, %(rec_source)s,
+                           %(rec_rank)s, %(popcount)s,%(popularity)s, %(quality)s, %(assessed_class)s,
+                           %(predicted_class)s, %(work_suggestions)s)""".format(logtable = self.config.getConfig('recommendation_log_new'));
 
         # SQL query to get old recommendations from the log table
         getOldRecsQuery = ur"""SELECT title
-                               FROM {logtable}
-                               WHERE lang=%(lang)s
-                               AND name=%(username)s""".format(logtable=self.config.getConfig('RECLOG_TABLE'));
+                               FROM (SELECT recsetid
+                                    FROM {user_recs}
+                                    WHERE lang=%(lang)s
+                                    AND username=%(username)s
+                                    ORDER BY rectime DESC
+                                    LIMIT %(nrecsets)s) AS userecs
+                               JOIN {logtable}
+                               USING (recsetid)""".format(user_recs=self.config.getConfig('user_recommendations'),
+                               logtable=self.config.getConfig('recommendation_log_new'));
 
         # Set up the list regex for this language
         self.listRegex = re.compile(self.config.getConfig('LIST_RE')[lang]);
