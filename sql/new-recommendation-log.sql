@@ -5,16 +5,16 @@ CREATE TABLE user_recommendations (
        lang VARCHAR(16) NOT NULL,
        username VARCHAR(255) NOT NULL,
        rectime TIMESTAMP NOT NULL,
-       KEY(lang)
+       KEY(lang, username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE utf8_bin;
 
 CREATE TABLE recommendation_log_new (
-       recsetid INT UNSIGNED,
+       recsetid INT UNSIGNED NOT NULL,
        title VARCHAR(255) NOT NULL,
        category VARCHAR(16) NOT NULL,
-       rank INT, -- number of rec within a given category
-       rec_source VARCHAR(16), -- which recommender engine it matched
-       rec_rank INT, -- rank in the rec engine's list of candidates
+       rank INT NOT NULL, -- number of rec within a given category
+       rec_source VARCHAR(16) NOT NULL, -- which recommender engine it matched
+       rec_rank INT NOT NULL, -- rank in the rec engine's list of candidates
        popcount INT, -- number of views/day for past 14 days
        popularity ENUM('Low', 'Medium', 'High'),
        quality ENUM('Low', 'Medium', 'High'),
