@@ -117,16 +117,6 @@ class RecFilter:
                                    FROM {lang}wiki_work_category_data
                                    WHERE title=%(title)s""".format(lang=lang);
 
-        # SQL query to add recs to the log
-        logRecQuery = ur"""INSERT INTO {logtable}
-                           (lang, username, rectime)
-                           VALUES (%(lang)s, %(username)s, %(rectime)s)""".format(logtable=self.config.getConfig('user_recommendations'));
-                           
-                      ur"""INSERT INTO {logtable}
-                           VALUES (%(recsetid)s, %(title)s, %(category)s, %(rank)s, %(rec_source)s,
-                           %(rec_rank)s, %(popcount)s,%(popularity)s, %(quality)s, %(assessed_class)s,
-                           %(predicted_class)s, %(work_suggestions)s)""".format(logtable = self.config.getConfig('recommendation_log_new'));
-
         # SQL query to get old recommendations from the log table
         getOldRecsQuery = ur"""SELECT title
                                FROM (SELECT recsetid
@@ -179,7 +169,8 @@ class RecFilter:
         # Get the previous recommendations from the database and add them to the
         # full list of the user's edits, to prevent them from being recommended.
         self.dbCursor.execute(getOldRecsQuery, {'lang': lang,
-                                                'username': user.encode('utf-8')});
+                                                'username': user.encode('utf-8')
+                                                'nrecsets': self.config.getConfig('RECSET_EXCLUDE_K')});
         for row in self.dbCursor.fetchall():
             pageTitle = unicode(row['title'], 'utf-8', errors='strict');
             edits[pageTitle] = 1;
@@ -284,63 +275,9 @@ class RecFilter:
 
         logging.info(u"OK, done!\n".encode('utf-8'));
 
-        if params['log']:
-            # Update logged recs by adding 1 to the age of everything
-            self.dbCursor.execute(updateOldRecsQuery, {'lang': lang,
-                                                       'username': user.encode('utf-8')});
 
-            logging.info(u"incremented age of user's previous recs...")
-
-            logFile = None;
-            extLogFile = None;
-            utcTimestamp = None;
-
-            logfilename = "{filename}.{reqtype}.{lang}".format(filename=self.config.getConfig('GET_RECS_LOG_FILE'), reqtype=params['request-type'], lang=lang);
-            try:
-                logFile = codecs.open(logfilename, 'a+', 'utf-8');
-            except IOError:
-                logging.error(u"unable to open log file!")
-
-            logfilename = "{filename}.{reqtype}.{lang}".format(filename=self.config.getConfig('EXTENDED_LOG_FILE'), reqtype=params['request-type'], lang=lang);
-            try:
-                extLogFile = codecs.open(logfilename, 'a+', 'utf-8');
-            except IOError:
-                logging.error(u"unable to open extended log file!")
-
-            utcTimestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S');
-
-            logging.info(u"opened log files, now storing recs...")
                 
-            for rec in recs.keys():
-                # Write tab-separated log lines for each rec
-                logFile.write(u"{time}\t{user}\t{rec}\t{cat}\t{rank}\t{source}\t{recRank}\n".format(time=utcTimestamp, user=user, rec=rec, cat=recs[rec]['cat'], rank=recs[rec]['rank'], source=recs[rec]['source'], recRank=recs[rec]['rec_rank']));
-
-                # Same for extended, with popularity, assessment, and prediction
-                extLogFile.write(u"{time}\t{user}\t{rec}\t{cat}\t{rank}\t{source}\t{recRank}\t{pop}\t{qual}\t{pred}\n".format(time=utcTimestamp, user=user, rec=rec, cat=recs[rec]['cat'], rank=recs[rec]['rank'], source=recs[rec]['source'], recRank=recs[rec]['rec_rank'], pop=recs[rec]['pop'], qual=recs[rec]['qual'], pred=recs[rec]['pred']));
-
-                self.dbCursor.execute(logRecQuery, {'lang': lang,
-                                                    'username': user.encode('utf-8'),
-                                                    'title': rec.encode('utf-8'),
-                                                    'rank': recs[rec]['rank'],
-                                                    'source': recs[rec]['source']});
-
-            logging.info(u"Done, now deleting old recs...")
-
-            # Now delete anything that's too old, and commit changes to the database
-            self.dbCursor.execute(deleteOldRecsQuery, {'lang': lang,
-                                                       'username': user.encode('utf-8'),
-                                                       'age': self.config.getConfig('REC_AGE_LIMIT')});
-            self.dbConn.commit();
-            if logFile:
-                try:
-                    logFile.close();
-                except IOError:
-                    logging.error(u"Failed close to log file!")
-            if extLogFile:
-                try:
-                    extLogFile.close();
-                except IOError:
-                    logging.error(u"Failed to close extended log file!")
+            
 
         self.db.disconnect();
         print(u"Completed filtering recommendations for user {0}:{1}".format(lang, user).encode('utf-8'))

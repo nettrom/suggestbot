@@ -34,6 +34,7 @@ import codecs
 import re
 import time
 import xmlrpclib
+import logging
 
 import pywikibot
 import mwparserfromhell as mwp
@@ -541,6 +542,16 @@ class SuggestBot:
            @type isRequest: bool
 
            '''
+        logUserRecs = ur"""INSERT INTO {logtable}
+                           (lang, username, rectime)
+                           VALUES (%(lang)s, %(username)s, %(rectime)s)""".format(logtable=self.config.getConfig('user_recommendations'));
+                           
+        logRecQuery = ur"""INSERT INTO {logtable}
+                           VALUES (%(recsetid)s, %(title)s, %(category)s, %(rank)s, %(rec_source)s,
+                           %(rec_rank)s, %(popcount)s,%(popularity)s, %(quality)s, %(assessed_class)s,
+                           %(predicted_class)s, %(work_suggestions)s)""".format(logtable = self.config.getConfig('recommendation_log_new'));
+        
+           
         if not username:
             logging.error("must supply username to do recommendations.")
             return None
@@ -589,8 +600,28 @@ class SuggestBot:
         # update userpage (test for now)
         if self.postRecommendations(username=username, recMsg=recMsg,
                                         page=page, force=force, replace=replace):
-            # do some logging here
-            pass
+            if self.config.getConfig('LOG_RECS'):
+                logging.info(u"Storing recommendations in database logging table    ")
+
+                utcTimestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S');
+                # first insert into user_recommendations
+                self.dbCursor.execute(logUserRecs,
+                                        {'lang': self.config.getConfig('WP_LANGCODE'),
+                                         'username': username.encode('utf-8'),
+                                         'rectime': utcTimestamp})
+                if self.dbCursor.rowcount != 1:
+                    logging.error(u"Inserted lang, username, timestamp to user_recommendations, got {n} rows inserted/updated".format(n=self.dbCursor.rowcount))
+                
+                recSetId = self.dbConn.insert_id()
+                
+                # for each recommendation, log it in recommendation_log       
+                for recTitle, recValues in recs.iteritem():
+                    recValues['recsetid'] = recSetId
+                    recValues['title'] = recTitle.encode('utf-8')
+                    recValues['cat'] = recValues['cat'].encode('utf-8')
+                    self.dbCursor.execute(logRecQuery, recValues)
+
+                self.dbConn.commit();
 
         return
 
