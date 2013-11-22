@@ -3,7 +3,7 @@
 '''
 Library with SuggestBot functionality
 
-Copyright (C) 2013 Morten Wang
+Copyright (C) 2005-2013 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
