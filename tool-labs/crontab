@@ -7,10 +7,12 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # are set up to redirect stderr and stdout to files themselves.
 
 # Jobs updating inlink count tables
-# Run every morning for nowiki, svwiki, ptwiki
+# Run every morning for enwiki, nowiki, svwiki, ptwiki, fawiki, huwiki,
+# and ruwiki
 14 1 * * * qsub $HOME/link-rec/update_linkcounts.sh no 2>$HOME/crontab-errors.txt >/dev/null
 14 2 * * * qsub $HOME/link-rec/update_linkcounts.sh sv 2>$HOME/crontab-errors.txt >/dev/null
 14 3 * * * qsub $HOME/link-rec/update_linkcounts.sh pt 2>$HOME/crontab-errors.txt >/dev/null
-
-# Run once a week for enwiki
-14 4 * * 4 qsub $HOME/link-rec/update_linkcounts.sh en 2>$HOME/crontab-errors.txt >/dev/null
+14 4 * * * qsub $HOME/link-rec/update_linkcounts.sh fa 2>$HOME/crontab-errors.txt >/dev/null
+14 5 * * * qsub $HOME/link-rec/update_linkcounts.sh hu 2>$HOME/crontab-errors.txt >/dev/null
+14 6 * * * qsub $HOME/link-rec/update_linkcounts.sh en 2>$HOME/crontab-errors.txt >/dev/null
+14 7 * * * qsub $HOME/link-rec/update_linkcounts.sh ru 2>$HOME/crontab-errors.txt >/dev/null

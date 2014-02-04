@@ -4,7 +4,7 @@
 Script to update the local table with inlink counts which is used
 for penalising popular pages in the link recommender.
 
-Copyright (C) 2012-2013 Morten Wang
+Copyright (C) 2012-2014 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -31,33 +31,34 @@ Boston, MA  02110-1301, USA.
 # so test if that happens, reconnect and re-execute.
 # _mysql_exceptions.OperationalError: (2013, 'Lost connection to MySQL server during query')
 
-from __future__ import with_statement;
+from __future__ import with_statement
 
-import MySQLdb;
-from MySQLdb import cursors;
+import MySQLdb
+from MySQLdb import cursors
 
-import sys;
-import os;
-import re;
+import sys
+import os
+import re
 
-import logging;
+import logging
 
-from datetime import datetime;
+from datetime import datetime
 
 class UpdateRunningError(Exception):
     """
     Raised if the status table declares that this wiki is already being updated.
     """
-    pass;
+    pass
 
 class UpdateTableError(Exception):
     """
     Raised if updating the status table does not result in one updated row.
     """
-    pass;
+    pass
 
 class InlinkTableUpdater:
-    def __init__(self, lang='en', verbose=False, sliceSize=100, commitSize=1000):
+    def __init__(self, lang='en', verbose=False,
+                 sliceSize=100, commitSize=1000):
         '''
         Instantiate object.
 
@@ -96,19 +97,22 @@ class InlinkTableUpdater:
                               'sv': 'p50380g50553__ilc.svwiki_inlinkcounts',
                               'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts',
                               'hu': 'p50380g50553__ilc.huwiki_inlinkcounts',
-                              'fa': 'p50380g50553__ilc.fawiki_inlinkcounts'};
+                              'fa': 'p50380g50553__ilc.fawiki_inlinkcounts',
+                              'ru': 'p50380g50553__ilc.ruwiki_inlinkcounts'}
         self.wikidbNames = {'en': 'enwiki_p',
                             'no': 'nowiki_p',
                             'sv': 'svwiki_p',
                             'pt': 'ptwiki_p',
                             'hu': 'huwiki_p',
-                            'fa': 'fawiki_p',};
+                            'fa': 'fawiki_p',
+                            'ru': 'ruwiki_p'}
         self.hostnames = {'en': 'enwiki.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
                           'pt': 'ptwiki.labsdb',
                           'hu': 'huwiki.labsdb',
-                          'fa': 'fawiki.labsdb'};
+                          'fa': 'fawiki.labsdb',
+                          'ru': 'ruwiki.labsdb'}
 
     def dbConnect(self):
         '''
@@ -121,29 +125,29 @@ class InlinkTableUpdater:
             self.dbConn = MySQLdb.connect(db=self.wikidbNames[self.lang],
                                           host=self.hostnames[self.lang],
                                           use_unicode=True,
-                                          read_default_file=os.path.expanduser(self.dbConfigFile));
+                                          read_default_file=os.path.expanduser(self.dbConfigFile))
             # Create an SSDictCursor, standard fare.
-            self.dbCursor = self.dbConn.cursor(cursors.SSDictCursor);
+            self.dbCursor = self.dbConn.cursor(cursors.SSDictCursor)
         except:
-            self.dbConn = None;
-            self.dbCursor = None;
+            self.dbConn = None
+            self.dbCursor = None
             
         if self.dbConn:
-            return True;
+            return True
         else:
-            return False;
+            return False
 
     def dbDisconnect(self):
         '''
         Close the database connection.
         '''
         try:
-            self.dbCursor.close();
-            self.dbConn.close();
+            self.dbCursor.close()
+            self.dbConn.close()
         except:
-            pass;
+            pass
 
-        return;
+        return
 
     def setUpdateStatus(self):
         """
@@ -152,24 +156,24 @@ class InlinkTableUpdater:
         """
         checkRunningQuery = u"""SELECT ilcu_update_running
                                 FROM {ilcUpdateTable}
-                                WHERE ilcu_lang=%(lang)s""".format(ilcUpdateTable=self.ilcUpdateTableName);
+                                WHERE ilcu_lang=%(lang)s""".format(ilcUpdateTable=self.ilcUpdateTableName)
         setRunningQuery = u"""UPDATE {ilcUpdateTable}
                               SET ilcu_update_running=1
-                              WHERE ilcu_lang=%(lang)s""".format(ilcUpdateTable=self.ilcUpdateTableName);
-        self.dbCursor.execute(checkRunningQuery, {'lang': self.lang});
-        row = self.dbCursor.fetchone();
-        self.dbCursor.fetchall(); # flush cursor
+                              WHERE ilcu_lang=%(lang)s""".format(ilcUpdateTable=self.ilcUpdateTableName)
+        self.dbCursor.execute(checkRunningQuery, {'lang': self.lang})
+        row = self.dbCursor.fetchone()
+        self.dbCursor.fetchall() # flush cursor
 
         if ord(row['ilcu_update_running']):
-            raise UpdateRunningError;
+            raise UpdateRunningError
 
-        self.dbCursor.execute(setRunningQuery, {'lang': self.lang});
+        self.dbCursor.execute(setRunningQuery, {'lang': self.lang})
         if self.dbCursor.rowcount != 1:
-            raise UpdateTableError;
-        self.dbConn.commit();
+            raise UpdateTableError
+        self.dbConn.commit()
 
         # OK, done.
-        return;
+        return
 
     def clearUpdateStatus(self):
         """

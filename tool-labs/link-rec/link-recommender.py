@@ -3,7 +3,7 @@
 '''
 Webservice script to recommend articles based on links between them.
 
-Copyright (C) 2011-2013 Morten Wang
+Copyright (C) 2011-2014 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -98,36 +98,39 @@ class LinkRecommender():
                        as popular.
         @type n_docs: int
         '''
-        self.lang = lang;
-        self.nrecs = nrecs;
-        self.max_depth = max_depth;
-        self.verbose = verbose;
-        self.sliceSize = sliceSize;
-        self.n_docs = n_docs;
+        self.lang = lang
+        self.nrecs = nrecs
+        self.max_depth = max_depth
+        self.verbose = verbose
+        self.sliceSize = sliceSize
+        self.n_docs = n_docs
 
         self.dbNames = {'en': 'enwiki_p',
                         'no': 'nowiki_p',
                         'sv': 'svwiki_p',
                         'pt': 'ptwiki_p',
                         'hu': 'huwiki_p',
-                        'fa': 'fawiki_p',};
+                        'fa': 'fawiki_p',
+                        'ru': 'ruwiki_p'}
         self.hostnames = {'en': 'enwiki.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
                           'pt': 'ptwiki.labsdb',
                           'hu': 'huwiki.labsdb',
-                          'fa': 'fawiki.labsdb'};
+                          'fa': 'fawiki.labsdb',
+                          'ru': 'ruwiki.labsdb'}
         # Table name of the inlink count table in our user database.
         self.tableNames = {'en': 'p50380g50553__ilc.enwiki_inlinkcounts',
                            'no': 'p50380g50553__ilc.nowiki_inlinkcounts',
                            'sv': 'p50380g50553__ilc.svwiki_inlinkcounts',
                            'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts',
                            'hu': 'p50380g50553__ilc.huwiki_inlinkcounts',
-                           'fa': 'p50380g50553__ilc.fawiki_inlinkcounts'};
+                           'fa': 'p50380g50553__ilc.fawiki_inlinkcounts',
+                           'ru': 'p50380g50553__ilc.ruwiki_inlinkcounts'}
 
-        self.dbConn = None;
-        self.dbCursor = None;
-        self.dbConfigFile = "~/replica.my.cnf";
+        self.dbConn = None
+        self.dbCursor = None
+        self.dbConfigFile = "~/replica.my.cnf"
 
         # Regular expressions for things that we exclude.
         # Note that we use match() to anchor these at the beginning
@@ -141,8 +144,9 @@ class LinkRecommender():
             u'sv': ur'\d+\.[ _]+(:[Jj]anuari|[Ff]ebruari|[Mm]ars|[Aa]pril|[Mm]aj|[Jj]uni|[Jj]uli|[Aa]ugusti|[Ss]eptember|[Oo]ktober|[Nn]ovember|[Dd]ecember)',
             u'pt': ur'\d+[ _]+de[ _]+(:[Jj]aneiro|[Ff]evereiro|[Mm]arço|[Aa]bril|[Mm]aio|[Jj]unho|[Jj]ulho|[Aa]gosto|[Ss]etembro|[Oo]utubro|[Nn]ovembro|[Dd]ezembro)',
             u'hu': ur'Január|Február|Március|Április|Május|Június|Július|Augusztus|Szeptember|Október|November|December',
-            u'fa': 'دسامب|نوامب|اکتب|سپتامب|اوت|ژوئی|ژوئن|مه|آوریل|مارس|فوریه|ژانویه'
-            };
+            u'fa': 'دسامب|نوامب|اکتب|سپتامب|اوت|ژوئی|ژوئن|مه|آوریل|مارس|فوریه|ژانویه',
+            u'ru': ur'(:Январь|Февраль|Март|Апрель|Май|Июнь|Июль|Август|Сентябрь|Октябрь|Ноябрь|Декабрь)|(:\d+[ _]+(:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря))'
+            }
 
         # Note: compatible with both ' '  and '_' as spaces
         self.lists = {
@@ -151,22 +155,24 @@ class LinkRecommender():
             u'sv': ur'^Lista[ _]över[ _]',
             u'pt': ur'^Lista[ _]de[ _]',
             u'hu': ur'[ _]listája$',
-            u'fa': ur'^فهرست'
-            };
+            u'fa': ur'^فهرست',
+            u'ru': ur'(^Список|(:Алфавитный[ _]|Хронологический[ _])список)|—[ _]список'
+            }
 
         # Compile the regular expressions
-        self.months_re = dict();
-        self.lists_re = dict();
+        self.months_re = dict()
+        self.lists_re = dict()
         for lang in self.months.keys():
-            self.months_re[lang] = re.compile(self.months[lang], re.U|re.I);
-            self.lists_re[lang] = re.compile(self.lists[lang], re.U|re.I);
+            self.months_re[lang] = re.compile(self.months[lang], re.U|re.I)
+            self.lists_re[lang] = re.compile(self.lists[lang], re.U|re.I)
 
-        self.rec_map = dict();
+        self.rec_map = dict()
 
     def checkLang(self):
-        if not self.lang in self.dbNames:
-	    return False;
-        return True;
+        '''
+        Were we instantiated with a language we support?
+        '''
+        return self.lang in self.dbNames
 
     def checkNrecs(self):
         if self.nrecs > 5000:
@@ -182,26 +188,26 @@ class LinkRecommender():
 
     def exclude_item(self, item=None):
         if not item:
-            return False;
+            return False
 
         # date
         if re.search(r'\d{4}', item):
-            return True;
+            return True
 
         # is a list
         if self.lists_re[self.lang].search(item):
-            return True;
+            return True
         
         # starting with a month name
         if self.months_re[self.lang].match(item):
-            return True;
+            return True
 
-        return False;
+        return False
 
     def get_links(self):
         '''Get all links from the articles in self.rec_map'''
         if not self.rec_map:
-            return None;
+            return None
 
         # SQL query to get linked articles from an input set of page IDs.
         # Single redirects are resolved, double redirects are marked
