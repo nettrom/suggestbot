@@ -1,4 +1,4 @@
-USE p50380g50553__ilc;
+CUSE p50380g50553__ilc;
 
 -- Format of the inlink count table used by links-server.py
 CREATE TABLE enwiki_inlinkcounts (
@@ -14,9 +14,11 @@ CREATE TABLE inlinkcount_updates (
 
 -- Insert default values for English Wikipedia where that is hosted
 INSERT INTO inlinkcount_updates
+(ilcu_lang, ilcu_timestamp)
 VALUES ('en', NULL)
 
 -- Insert default values for Norwegian, Swedish, and Portuguese
 -- where those are hosted.
 INSERT INTO inlinkcount_updates
+(ilcu_lang, ilcu_timestamp)
 VALUES ('no', NULL), ('sv', NULL), ('pt', NULL);
