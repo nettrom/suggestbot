@@ -57,7 +57,7 @@ class SuggestBotConfig:
             'pt': u"SuggestBot recomenda estes artigos",
             'fa': u'SuggestBot recommends these articles...',
             'hu': u'SuggestBot recommends these articles...',
-            'ru': u'SuggestBot recommends these articles...',
+            'ru': u'SuggestBot предлагает следующие статьи...',
             }
 
         # Edit comments used when removing the request template
@@ -69,7 +69,7 @@ class SuggestBotConfig:
             'pt': u"Modelo de pedido de SuggestBot removido para evitar postagens múltiplas",
             'fa': u'Removed SuggestBot request template to prevent multiple suggestions posts',
             'hu': u'Removed SuggestBot request template to prevent multiple suggestions posts',
-            'ru': u'Removed SuggestBot request template to prevent multiple suggestions posts'
+            'ru': u'Удаление шаблона запроса к SuggestBot для предотвращения дублирования сообщений'
             }
 
         # Table names for database tables containing task categories
@@ -492,7 +492,7 @@ class SuggestBotConfig:
 
         # URL to the Tool Labs webservice used to get quality metadata
         # (num. images, num. wikilinks, num. broken wikilinks) for articles
-        self.config['QUALWS_URL'] = ur'http://tools.wmflabs.org/suggestbot/quality-metadata.py'
+        self.config['QUALWS_URL'] = ur'http://tools.wmflabs.org/suggestbot/quality_metadata'
 
         # Variables that control how we handle regulars, and store them
         # in the suggestbot database.
@@ -620,8 +620,8 @@ class SuggestBotConfig:
                 'regulars': u'Usuário(a):SuggestBot/Templates/Regulars',
                 },
             u'ru': {
-                u'request': u'Участник:SuggestBot/Templates/Requests',
-                u'regulars': u'Участник:SuggestBot/Templates/Regulars',
+                u'request': u'Участник:SuggestBot/Шаблоны/Запросы',
+                u'regulars': u'Участник:SuggestBot/Шаблоны/Регулярные',
                 },
             u'fa': {
                 u'request': u'کاربر:SuggestBot/Templates/Requests',
@@ -639,7 +639,7 @@ class SuggestBotConfig:
                     'userbox': u'Användare:FörslagsBot/användarruta', },
             u'pt': { 'config': u'Usuário(a):SuggestBot/config',
                     'userbox': u'Usuário(a):SuggestBot/userbox', },
-            u'ru': { 'config': u'Участник:SuggestBot/config',
+            u'ru': { 'config': u'Участник:SuggestBot/Настройка',
                     'userbox': u'Участник:SuggestBot/userbox',
                 },
             u'fa': {
@@ -660,8 +660,8 @@ class SuggestBotConfig:
             'pt': [ u'Usuário(a):SuggestBot/config',
                     u'Usuário(a):SuggestBot/Getting suggestions regularly',
                     u'Usuário(a):SuggestBot/Obtendo sugestões regularmente'],
-            'ru': [ u'Участник:SuggestBot/config',
-                    u'Участник:SuggestBot/Getting Recommendations Regularly' ],
+            'ru': [ u'Участник:SuggestBot/Настройка',
+                    u'Участник:SuggestBot/Регулярные рекомендации' ],
             'fa': [ u'کاربر:SuggestBot/config',
                     u'کاربر:SuggestBot/Getting suggestions regularly', ]
             }
@@ -695,11 +695,13 @@ class SuggestBotConfig:
                         [],
                     u'User:SuggestBot/suggest': [],
                     },
-            u'ru': { u'Участник:SuggestBot/suggest':
-                     [],
+            u'ru': { u'Участник:SuggestBot/suggest': [],
+                     u'User:SuggestBot/suggest': [],
                  },
             u'fa': { u'کاربر:SuggestBot/suggest':
-                         [],
+                         [u'ربات پیشنهاددهنده'],
+                     u'User:SuggestBot/suggest':
+                         [u'ربات پیشنهاددهنده'],
                 }
             }
 
@@ -802,16 +804,16 @@ class SuggestBotConfig:
             'no': ur"en gang i måneden",
             'sv': ur"en gång i månaden",
             'pt': ur"mensalmente|uma vez por mês",
-            'ru': ur'',
-            'fa': ur'',
+            'ru': ur"ежемесячно|раз в месяц",
+            'fa': ur'monthly|once a month',
             };
         self.config['TWICE_MONTHLY'] = {
             'en': ur"twice a month|(every|once (a|every)) (fortnight|two weeks)",
             'no': ur"to ganger i måneden|annenhver uke",
             'sv': ur"två gånger i månaden",
             'pt': ur"quinzenalmente|duas vezes por mês",
-            'ru': ur'',
-            'fa': ur'',
+            'ru': ur"дважды в месяц",
+            'fa': ur'twice a month|every two weeks',
             };
         self.config['WEEKLY'] = {
             # NOTE: we're allowing users to specify getting them daily, but serve them weekly
@@ -819,8 +821,8 @@ class SuggestBotConfig:
             'no': ur"en gang i uken",
             'sv': ur"en gång i veckan",
             'pt': ur"uma vez por semana|semanalmente",
-            'ru': ur'',
-            'fa': ur'',
+            'ru': ur"еженедельно|раз в неделю",
+            'fa': ur'(once a|every) week|weekly',
             };
         
         # Dictionary holding the text of the header of the SuggestBot
@@ -831,8 +833,8 @@ class SuggestBotConfig:
             'no': u'== Artikler du med glede kan redigere, fra AnbefalingsBot ==',
             'sv': u'== Artiklar du kanske vill redigera, från FörslagsBot ==',
             'pt': u'== Artigos que você gostaria de editar, de SuggestBot ==',
-            'ru': u'',
-            'fa': u'',
+            'ru': u'== Статьи, которые Вам возможно захочется исправить, от SuggestBot ==',
+            'fa': u'== مقاله‌های پیشنهادی توسط ربات پیشنهاددهنده ==',
             };
 
         self.config['REC_HEADER_RE'] = {
@@ -840,8 +842,8 @@ class SuggestBotConfig:
             'no': u'Artikler du med glede kan redigere, fra AnbefalingsBot',
             'sv': u'Artiklar du kanske vill redigera, från FörslagsBot',
             'pt': u'Artigos que você gostaria de editar, de SuggestBot',
-            'ru': u'',
-            'fa': u'',
+            'ru': u'Статьи, которые Вам возможно захочется исправить, от SuggestBot',
+            'fa': u'مقاله‌های پیشنهادی توسط ربات پیشنهاددهنده',
             };
 
         # Dictionarly holding lists of titles of subsections of SuggestBot's
@@ -866,16 +868,16 @@ class SuggestBotConfig:
             'no': ur'\s*ja\s*',
             'sv': ur'\s*ja\s*',
             'pt': ur'\s*sim\s*',
-            'ru': ur'',
-            'fa': ur'',
+            'ru': ur'\s*да\s*',
+            'fa': ur'\s*yes\s*',
             };
         self.config['RE_NO'] = {
             'en': ur'\s*no\s*',
             'no': ur'\s*nei\s*',
             'sv': ur'\s*nej\s*',
             'pt': ur'\s*não\s*',
-            'ru': ur'',
-            'fa': ur'',
+            'ru': ur'\s*нет\s*',
+            'fa': ur'\s*no\s*',
             };
 
         ## Regular expressions to match list-articles in the given language
