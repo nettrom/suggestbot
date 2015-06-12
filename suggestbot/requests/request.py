@@ -1,27 +1,46 @@
 #!/usr/env/python
 # -*- coding: utf-8 -*-
-"""
+'''
 Class for suggestion requests.
-"""
 
-import os;
-import sys;
-import re;
+Copyright (C) 2005-2015 SuggestBot Dev Group
 
-import MySQLdb;
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Library General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Library General Public License for more details.
+
+You should have received a copy of the GNU Library General Public
+License along with this library; if not, write to the
+Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+Boston, MA  02110-1301, USA.
+'''
+
+import os
+import sys
+import re
+
+import MySQLdb
+
+from suggestbot import config
 
 class RequestLoadDataError(Exception):
-    pass;
+    pass
 
 class RequestIdError(Exception):
-    pass;
+    pass
 
 class RequestUpdateError(Exception):
-    pass;
+    pass
 
 class Request:
     def __init__(self, lang=u"en", id=None, username=None, page=None, revid=None,
-                 timestamp=None, templates=[], seeds=[], sbDb=None, config=None,
+                 timestamp=None, templates=[], seeds=[], sbDb=None,
                  verbose=False):
         """
         Instatiate a new Request object.
@@ -59,35 +78,32 @@ class Request:
         @param verbose: write informational output?
         @type verbose: bool
         """
-        self.verbose = verbose;
-        self.id = id;
-        self.lang = lang;
-        self.username = username;
-        self.page = page;
-        self.revId = revid;
-        self.startTime = timestamp;
-        self.endTime = None; # request not fully processed yet
-        self.status = 'processing';
+        self.verbose = verbose
+        self.id = id
+        self.lang = lang
+        self.username = username
+        self.page = page
+        self.revId = revid
+        self.startTime = timestamp
+        self.endTime = None # request not fully processed yet
+        self.status = 'processing'
 
-        self.templates = templates;
+        self.templates = templates
 
-        self.seeds = seeds;
-        self.seedSource = "contributions";
+        self.seeds = seeds
+        self.seedSource = "contributions"
         if seeds:
-            self.seedSource = 'template';
+            self.seedSource = 'template'
 
         # Recommendations issued with this request
         # (dict where keys are titles, values are dicts with data)
-        self.recs = {};
+        self.recs = {}
 
-        # SuggestBot configuration
-        self.config = config;
-
-        self.dbConn = sbDb;
+        self.dbConn = sbDb
         # if we were given a request ID, fetch data from the database
         # (note: test for None since id 0 is a valid id)
         if self.id is not None:
-            self.populateFromDatabase();
+            self.populateFromDatabase()
 
     def populateFromDatabase(self):
         """
@@ -96,57 +112,57 @@ class Request:
         
         # Query to get basic Request data
         getDataQuery = ur"""SELECT * FROM {reqtable}
-                            WHERE id=%(id)s""".format(reqtable=self.config.getConfig("REQ_LOGTABLE"));
+                            WHERE id=%(id)s""".format(reqtable=config.req_logtable)
         
         # Query to get the seeds
         getSeedsQuery = ur"""SELECT * FROM {reqseedstable}
-                             WHERE id=%(id)s""".format(reqseedstable=self.config.getConfig("REQ_SEEDSTABLE"));
+                             WHERE id=%(id)s""".format(reqseedstable=config.req_seedstable)
 
         # Query to get recs
         getRecsQuery = ur"""SELECT * FROM {reqrecstable}
-                            WHERE id=%(id)s""".format(reqrecstable=self.config.getConfig("REQ_RECSTABLE"));
+                            WHERE id=%(id)s""".format(reqrecstable=config.req_recstable)
 
-        dbCursor = self.dbConn.cursor();
+        dbCursor = self.dbConn.cursor()
         try:
-            dbCursor.execute(getDataQuery, {'id': self.id});
-            row = dbCursor.fetchone();
-            dbCursor.fetchall(); # flush cursor
+            dbCursor.execute(getDataQuery, {'id': self.id})
+            row = dbCursor.fetchone()
+            dbCursor.fetchall() # flush cursor
             if not row:
-                sys.stderr.write(u"SBot Error: failed to find request with id {id} in the database\n".format(id=self.id));
-                raise RequestIdError;
+                sys.stderr.write(u"SBot Error: failed to find request with id {id} in the database\n".format(id=self.id))
+                raise RequestIdError
 
-            self.lang = row['lang'];
-            self.username = unicode(row['username'], 'utf-8', errors='strict');
-            self.page = unicode(row['page'], 'utf-8', errors='strict');
-            self.revId = row['revid'];
-            self.seedSource = row['seed_source'];
-            self.startTime = row['start_time'];
-            self.endTime = row['end_time'];
-            self.status = row['status'];
+            self.lang = row['lang']
+            self.username = unicode(row['username'], 'utf-8', errors='strict')
+            self.page = unicode(row['page'], 'utf-8', errors='strict')
+            self.revId = row['revid']
+            self.seedSource = row['seed_source']
+            self.startTime = row['start_time']
+            self.endTime = row['end_time']
+            self.status = row['status']
 
-            templates = unicode(row['templates'], 'utf-8', errors='strict');
-            self.templates = templates.split(u",");
+            templates = unicode(row['templates'], 'utf-8', errors='strict')
+            self.templates = templates.split(u",")
         except MySQLdb.Error, e:
-            sys.stderr.write("SBot Error: Unable to update w/request data from database!\n");
-            sys.stderr.write("Error {d}: {s}\n".format(d=e.args[0], s=e.args[1]));
-            raise RequestLoadDataError;
+            sys.stderr.write("SBot Error: Unable to update w/request data from database!\n")
+            sys.stderr.write("Error {d}: {s}\n".format(d=e.args[0], s=e.args[1]))
+            raise RequestLoadDataError
 
         # We got request data, look for seeds...
         try:
-            dbCursor.execute(getSeedsQuery, {'id': self.id});
+            dbCursor.execute(getSeedsQuery, {'id': self.id})
             for row in dbCursor.fetchall():
-                seedTitle = unicode(row['title'], 'utf-8', errors='strict');
-                self.seeds.append(seedTitle);
+                seedTitle = unicode(row['title'], 'utf-8', errors='strict')
+                self.seeds.append(seedTitle)
         except MySQLdb.Error, e:
-            sys.stderr.write("SBot Error: Unable to update w/seed data from database!\n");
-            sys.stderr.write("Error {d}: {s}\n".format(d=e.args[0], s=e.args[1]));
-            raise RequestLoadDataError;
+            sys.stderr.write("SBot Error: Unable to update w/seed data from database!\n")
+            sys.stderr.write("Error {d}: {s}\n".format(d=e.args[0], s=e.args[1]))
+            raise RequestLoadDataError
 
         # ...and look for recs
         try:
-            dbCursor.execute(getRecsQuery, {'id': self.id});
+            dbCursor.execute(getRecsQuery, {'id': self.id})
             for row in dbCursor.fetchall():
-                recTitle = unicode(row['title'], 'utf-8', errors='strict');
+                recTitle = unicode(row['title'], 'utf-8', errors='strict')
                 self.recs[recTitle] = {'title': recTitle,
                                        'cat': row['category'],
                                        'rank': row['rank'],
@@ -156,32 +172,32 @@ class Request:
                                        'popularity': row['popularity'],
                                        'quality': row['quality'],
                                        'assessedclass': row['assessed_class'],
-                                       'predictedclass': row['predicted_class']};
+                                       'predictedclass': row['predicted_class']}
         except MySQLdb.Error, e:
-            sys.stderr.write("SBot Error: Unable to update w/rec data from database!\n");
-            sys.stderr.write("Error {d}: {s}\n".format(d=e.args[0], s=e.args[1]));
-            raise RequestLoadDataError;
+            sys.stderr.write("SBot Error: Unable to update w/rec data from database!\n")
+            sys.stderr.write("Error {d}: {s}\n".format(d=e.args[0], s=e.args[1]))
+            raise RequestLoadDataError
 
         # OK, done
-        return;
+        return
 
     def updateDatabase(self):
         """
         Update the database with the current state of this object.
         """
 
-        reqTable = self.config.getConfig("REQ_LOGTABLE");
-        reqSeedsTable = self.config.getConfig("REQ_SEEDSTABLE");
-        reqRecsTable = self.config.getConfig("REQ_RECSTABLE");
+        reqTable = config.req_logtable
+        reqSeedsTable = config.req_seedstable
+        reqRecsTable = config.req_recstable
 
         existsQuery = ur"""SELECT * FROM {reqtable}
-                           WHERE id=%(id)s""".format(reqtable=reqTable);
+                           WHERE id=%(id)s""".format(reqtable=reqTable)
         insertQuery = ur"""INSERT INTO {reqtable}
                           (lang, username, page, revid, templates,
                            seed_source, start_time, status)
                            VALUES (%(lang)s, %(username)s,
                            %(page)s, %(revid)s, %(templates)s,
-                           %(seedsource)s, %(starttime)s, %(status)s)""".format(reqtable=reqTable);
+                           %(seedsource)s, %(starttime)s, %(status)s)""".format(reqtable=reqTable)
 
         updateQuery = ur"""UPDATE {reqtable}
                            SET lang=%(lang)s, username=%(username)s,
@@ -189,16 +205,16 @@ class Request:
                            templates=%(templates)s, seed_source=%(seedsource)s,
                            start_time=%(starttime)s, end_time=%(endtime)s,
                            status=%(status)s
-                           WHERE id=%(id)s""".format(reqtable=reqTable);
+                           WHERE id=%(id)s""".format(reqtable=reqTable)
 
         deleteSeedsQuery = ur"""DELETE FROM {reqseedstable}
-                                WHERE id=%(id)s""".format(reqseedstable=reqSeedsTable);
+                                WHERE id=%(id)s""".format(reqseedstable=reqSeedsTable)
         insertSeedQuery = ur"""INSERT INTO {reqseedstable}
                                (id, title)
-                               VALUES (%(id)s, %(title)s)""".format(reqseedstable=reqSeedsTable);
+                               VALUES (%(id)s, %(title)s)""".format(reqseedstable=reqSeedsTable)
 
         deleteRecsQuery = ur"""DELETE FROM {reqrecstable}
-                               WHERE id=%(id)s""".format(reqrecstable=reqRecsTable);
+                               WHERE id=%(id)s""".format(reqrecstable=reqRecsTable)
         insertRecQuery = ur"""INSERT INTO {reqrecstable}
                               (id, title, category, rank, rec_source,
                                rec_rank, popcount, popularity, quality,
@@ -206,7 +222,7 @@ class Request:
                               VALUES (%(id)s, %(title)s, %(category)s, %(rank)s,
                               %(rec_source)s, %(rec_rank)s, %(popcount)s,
                               %(popularity)s, %(quality)s, %(assessed_class)s,
-                              %(predicted_class)s)""".format(reqrecstable=reqRecsTable);
+                              %(predicted_class)s)""".format(reqrecstable=reqRecsTable)
 
         # build update dictionary
         reqData = {"id": self.id,
@@ -218,9 +234,9 @@ class Request:
                    "seedsource": self.seedSource,
                    "starttime": self.startTime,
                    "endtime": self.endTime,
-                   "status": self.status};
+                   "status": self.status}
 
-        dbCursor = self.dbConn.cursor();
+        dbCursor = self.dbConn.cursor()
         try:
             # check if this request exists
             dbCursor.execute(existsQuery, reqData);

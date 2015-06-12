@@ -32,21 +32,19 @@ import logging
 import MySQLdb
 from MySQLdb import cursors
 
+import os
+
 class SuggestBotDatabase:
-    def __init__(self, config=None):
+    def __init__(self, default_file='my.cnf'):
         """
         Instantiate an object of this class.
 
-        @param config SuggestBot configuration with database connection details
-        @type config SuggestBotConfig
+        @param default_file: path to the MySQL configuration file,
+                             relative to the SuggestBot installation directory
+        @type default_file: str
         """
 
-        if not config:
-            logging.error("Unable to instantiate database class without a configuration!");
-            return;
-
-        self.config = config;
-
+        self.default_file = os.path.join(os.environ['SUGGESTBOT_DIR'], default_file)
         self.conn = None;
         self.cursor = None;
 
@@ -55,19 +53,15 @@ class SuggestBotDatabase:
         Connect to the database that is defined in config.
         '''
         try:
-            self.conn = MySQLdb.connect(host = self.config.getConfig('DB_HOST'),
-                                        user = self.config.getConfig('DB_USER'),
-                                        passwd = self.config.getConfig('DB_AUTH'),
-                                        unix_socket = '/var/run/mysqld/mysqld.sock',
-                                        db = self.config.getConfig('DB_NAME'),
+            self.conn = MySQLdb.connect(read_default_file=self.default_file,
                                         charset='utf8',
                                         use_unicode=True)
             self.cursor = self.conn.cursor(cursors.SSDictCursor)
-            return True;
+            return True
         except MySQLdb.Error, e:
             logging.error("Unable to connect to database.")
             logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
-            return False;
+            return False
 
     def disconnect(self):
         '''
@@ -75,16 +69,16 @@ class SuggestBotDatabase:
         '''
         try:
             if self.cursor:
-                self.cursor.close();
-                self.cursor = None;
+                self.cursor.close()
+                self.cursor = None
             if self.conn:
-                self.conn.close();
-                self.conn = None;
+                self.conn.close()
+                self.conn = None
             return True;
         except MySQLdb.Error, e:
             logging.error("Unable to disconnect from database.")
             logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
-            return False;
+            return False
 
     def getConnection(self):
         """

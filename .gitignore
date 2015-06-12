@@ -1,2 +1,5 @@
 # Ignore all compiled Python libraries
 *.pyc
+
+# Ignore the MySQL configuration file
+my.cnf
