@@ -26,6 +26,10 @@ import logging
 
 from reqhandler import RequestTemplateHandler
 
+## Need a "WikiProjectRequest" object, or something similar,
+## to hold information about the project request
+## Also need some configuration variables: how many days between each update
+
 class WikiProjectHandler(RequestTemplateHandler):
     def __init__(self, lang=u'en',
                  templates={u"User:SuggestBot/suggest": []},
@@ -56,6 +60,12 @@ class WikiProjectHandler(RequestTemplateHandler):
 
     def process_requests(self):
         ## 1: find all open requests
+        ##    Two sources for requests:
+        ##    1.1: transclusions of a specific template (I propose we create
+        ##         User:SuggestBot/wp-suggest as a redirect, similar to th-suggest)
+        ##    1.2: https://tools.wmflabs.org/projanalysis/config.php
+        ##         projects that want suggestions have suggestbot: true, need to have
+        ##         a config variable with the subpage name for those projects
         ## 2: process and update them
 
 def main():
