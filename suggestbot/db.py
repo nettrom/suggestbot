@@ -30,7 +30,6 @@ __version__ = "$Id$";
 
 import logging
 import MySQLdb
-from MySQLdb import cursors
 
 import os
 
@@ -54,9 +53,8 @@ class SuggestBotDatabase:
         '''
         try:
             self.conn = MySQLdb.connect(read_default_file=self.default_file,
-                                        charset='utf8',
-                                        use_unicode=True)
-            self.cursor = self.conn.cursor(cursors.SSDictCursor)
+                                        charset='utf8')
+            self.cursor = self.conn.cursor(MySQLdb.cursors.SSDictCursor)
             return True
         except MySQLdb.Error as e:
             logging.error("Unable to connect to database.")

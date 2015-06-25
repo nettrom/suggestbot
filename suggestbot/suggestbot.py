@@ -32,7 +32,7 @@ import sys
 import codecs
 import re
 import time
-import xmlrpclib
+import xmlrpc.client
 import logging
 
 import pywikibot
@@ -145,15 +145,15 @@ class SuggestBot:
            @type interestPages: pywikibot.Page iterator
            '''
 
-        recServer = xmlrpclib.ServerProxy("http://{hostname}:{port}".format(hostname=config.rec_server,
+        recServer = xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(hostname=config.rec_server,
                                                                             port=config.main_server_port),
                                           allow_none=True)
 
         # Server expects language, username, and request type as three parameters,
         # and then the rest as a dictionary.  Prepare said dictionary.
-        item_end = u"first"
+        item_end = "first"
         if itemEnd:
-            item_end = u"last"
+            item_end = "last"
         recParameters = {'articles': [],
                          'item-end': item_end,
                          'filter-minor': filterMinor,
@@ -179,9 +179,9 @@ class SuggestBot:
                                       username,
                                       request_type,
                                       recParameters)
-        except xmlrpclib.Fault, e:
+        except xmlrpc.client.Fault as e:
             logging.error("something went wrong when trying to get suggestions:")
-            logging.error(u"{error}".format(error=e))
+            logging.error("{error}".format(error=e))
 
         return recs
 
@@ -205,9 +205,9 @@ class SuggestBot:
             return None
 
         # Create the parameter string of "|CAT?=ITEM" where ? is the order.
-        paramString = u""
+        paramString = ""
         for (recTitle, recData) in recs.iteritems():
-            paramString = u"{params}|{category}{order}={title}".format(params=paramString,
+            paramString = "{params}|{category}{order}={title}".format(params=paramString,
                                                                        category=recData['cat'],
                                                                        order=recData['rank'],
                                                                        title=recTitle)
@@ -215,21 +215,21 @@ class SuggestBot:
         # On English Wikipedia we currently run an experiment with popularity,
         # quality, and task suggestions.  RequestTemplateHandler doesn't supply
         # a user group, so if it is set, we know we're processing regular users.
-        if config.wp_langcode == u'en' \
+        if config.wp_langcode == 'en' \
                 and userGroup:
             for (recTitle, recData) in recs.iteritems():
                 # Was popcount calculated?  If not, set it to an empty string,
                 # {{formatnum:}} appears to handle that nicely.
                 if not 'popcount' in recData \
                         or recData['popcount'] < 0:
-                    recData['popcount'] = u""
+                    recData['popcount'] = ""
 
                 # Add quality data
                 qual = recData['pred'].lower()
                 qualSort = 1.0
                 if qual == u'high':
                     qualSort = 3.0
-                elif qual == u'medium':
+                elif qual == 'medium':
                     qualSort = 2.0
                 if recData['pred']: # did we get a prediction?
                     assessedClass = "Unassessed"
@@ -244,7 +244,7 @@ class SuggestBot:
                     qual = config.quality_map[qual].format(rectitle=recTitle, assessedclass=assessedClass, predclass=predClass)
 
                 # Add both popularity and quality parameters to paramString
-                paramString = u"{params}|POP{category}{order}={popcount}|QUAL{category}{order}={qualcode}|QUALSORT{category}{order}={qualsort}".format(params=paramString, category=recData['cat'], order=recData['rank'], popcount=recData['popcount'], qualcode=qual, qualsort=qualSort)
+                paramString = "{params}|POP{category}{order}={popcount}|QUAL{category}{order}={qualcode}|QUALSORT{category}{order}={qualsort}".format(params=paramString, category=recData['cat'], order=recData['rank'], popcount=recData['popcount'], qualcode=qual, qualsort=qualSort)
 
                 # NOTE: for merge tasks, link to the merge discussion directly?
                 #       No, we link to the talk page, where the merge discussion
@@ -268,30 +268,30 @@ class SuggestBot:
                 for task in recData['work']:
                     # print "task=", task;
                     # split into task and yes/no/maybe
-                    (task, verdict) = task.split(u':')
+                    (task, verdict) = task.split(':')
                     # NOTE: Based on beta testing, we skip marking maybe-tasks
                     #       with a ?
-                    if verdict == u'maybe':
-                        verdict = u'no'
+                    if verdict == 'maybe':
+                        verdict = 'no'
                     # map into human-readable form
                     task = config.humantasks[task]
                     # should we skip headings and links?
-                    if task in [u"headings", u"links"] \
+                    if task in ["headings", "links"] \
                             and skipLinksAndHeadings:
                         verdict = "no"
                     # make key into configuration's TASK_MAP
-                    mapKey = u'{task}-{verdict}'.format(task=task, verdict=verdict)
+                    mapKey = '{task}-{verdict}'.format(task=task, verdict=verdict)
                     # put it all together...
-                    paramString = u"{params}|{task}{category}{order}={mapping}".format(params=paramString, task=task.upper(), category=recData['cat'], order=recData['rank'], mapping=config.task_map[mapKey].format(rectitle=recTitle))
+                    paramString = "{params}|{task}{category}{order}={mapping}".format(params=paramString, task=task.upper(), category=recData['cat'], order=recData['rank'], mapping=config.task_map[mapKey].format(rectitle=recTitle))
                     # remove this task from the set of all tasks
                     all_tasks.remove(task)
 
                 # Go through all remaining tasks and add them as parameters,
                 # building a key into config's TASK_MAP as before
                 for task in all_tasks:
-                    task_key = u'{task}-no'.format(task=task)
+                    task_key = '{task}-no'.format(task=task)
                     # Add the parameter to not show any task needed
-                    paramString = u"{params}|{task}{category}{order}={mapping}".format(params=paramString, task=task.upper(), category=recData['cat'], order=recData['rank'], mapping=config.task_map[task_key])
+                    paramString = "{params}|{task}{category}{order}={mapping}".format(params=paramString, task=task.upper(), category=recData['cat'], order=recData['rank'], mapping=config.task_map[task_key])
 
         # Now create the subst template which refers to
         # our self-defined message template, with the created string of parameters
@@ -300,14 +300,14 @@ class SuggestBot:
             recTemplate = config.templates[lang]['request']
 
         # Add in the template and parameters (note escaping of '{' with '{{')
-        recString = u"{{{{subst:{template}{params}}}}} -- ~~~~".format(template=recTemplate,
+        recString = "{{{{subst:{template}{params}}}}} -- ~~~~".format(template=recTemplate,
                                                                    params=paramString)
         return recString
 
     # FIXME: get a unit test case of the recommendation post thingamajig
     # replacing content and stuff.
 
-    def addReplaceRecMessage(self, pageSource=u"", recMsg=u"",
+    def addReplaceRecMessage(self, pageSource="", recMsg="",
                              replace=False):
         """
         Adds or replaces a message with article recommendations to the given
@@ -338,19 +338,19 @@ class SuggestBot:
         # on a page that we're likely to post to (User and User talk namespaces), we're
         # the only one using it.
         lang = config.wp_langcode
-        if lang == u'en':
+        if lang == 'en':
             parsedCode = mwp.parse(pageSource)
             templates = parsedCode.filter_templates(recursive=True)
             for template in templates:
                 if template.name.matches('Ntsh'):
-                    template.name = u'Hs'
+                    template.name = 'Hs'
                     
             # Replace current wikitext with new code that uses Template:Hs
             pageSource = unicode(parsedCode)
 
         # Normal replacement or not replacement of suggestion post
         if not replace:
-            newPageSource = u"{current}\n\n{recs}".format(current=pageSource,
+            newPageSource = "{current}\n\n{recs}".format(current=pageSource,
                                                           recs=recMsg);
         else:
             # We're replacing, do some magic to find the last rec and
@@ -385,7 +385,7 @@ class SuggestBot:
 
             # If none was found, ignore and append
             if i == len(parsedCode.nodes):
-                newPageSource = u"{current}\n\n{recs}".format(current=pageSource,
+                newPageSource = "{current}\n\n{recs}".format(current=pageSource,
                                                               recs=recMsg);
             else:
                 # examine the remaining list of nodes, if encountering a section
@@ -413,9 +413,9 @@ class SuggestBot:
 
             # Now the new page source is the content of parsedtext.nodes[:firstindex]
             # + new content + the content of parsedtext.nodes[lastindex:]
-            newPageSource = u"{beforeMsg}{recMsg}\n\n{afterMsg}".format(beforeMsg=u"".join([unicode(node) for node in parsedCode.nodes[:recMsgStartIdx]]),
+            newPageSource = "{beforeMsg}{recMsg}\n\n{afterMsg}".format(beforeMsg="".join([unicode(node) for node in parsedCode.nodes[:recMsgStartIdx]]),
                                                                     recMsg=recMsg,
-                                                                    afterMsg=u"".join([unicode(node) for node in parsedCode.nodes[recMsgEndIdx:]]));
+                                                                    afterMsg="".join([unicode(node) for node in parsedCode.nodes[recMsgEndIdx:]]));
 
         return newPageSource;
 
@@ -455,12 +455,12 @@ class SuggestBot:
                       watch=watch, minor=minor, force=force)
             pywikibot.config.max_retries = max_retries
         except pywikibot.exceptions.EditConflict:
-            logging.error(u"Posting recommendations to {title} failed, edit conflict.".format(title=page.title()))
+            logging.error("Posting recommendations to {title} failed, edit conflict.".format(title=page.title()))
             raise PageNotSavedError
 
         except pywikibot.exceptions.PageNotSaved as e:
             # Wait a bit, then test if the edit actually got saved
-            logging.warning(u"Failed to post recommendations to {title} on first try, waiting 60 seconds to check edit history.".format(title=page.title()))
+            logging.warning("Failed to post recommendations to {title} on first try, waiting 60 seconds to check edit history.".format(title=page.title()))
             time.sleep(60)
             # Check article's edit history, did SuggestBot recently save?
             # ver. hist. is list of tuples: (revid, timestamp, user, comment)
@@ -476,13 +476,13 @@ class SuggestBot:
                     sbot_edited = sbot_edited or True
                 
             if not sbot_edited:
-                logging.error(u"Failed posting recommendations to {title}.\nError: {emsg}\n".format(title=page.title(), emsg=e))
+                logging.error("Failed posting recommendations to {title}.\nError: {emsg}\n".format(title=page.title(), emsg=e))
                 raise PageNotSavedError
 
         # ok, all done
         return
 
-    def postRecommendations(self, username=u"", recMsg=None,
+    def postRecommendations(self, username="", recMsg=None,
                             page=None, force=False, replace=False,
                             headLevel=2):
         '''
@@ -517,7 +517,7 @@ class SuggestBot:
 
         # check if the user is blocked
         if recUser.isBlocked():
-            logging.warnng(u"user {username} is blocked, posting aborted.".format(username=username).encode('utf-8'))
+            logging.warnng("user {username} is blocked, posting aborted.".format(username=username).encode('utf-8'))
             return False
 
         # get the user's talk page, or a preferred page to post recs to if defined
@@ -529,10 +529,10 @@ class SuggestBot:
         try:
             pageSource = destPage.get()
         except pywikibot.exceptions.NoPage:
-            logging.warning(u"Destination page {title} doesn't exist, will be created.".format(title=destPage.title()))
+            logging.warning("Destination page {title} doesn't exist, will be created.".format(title=destPage.title()))
             pageSource = ""
         except pywikibot.exceptions.IsRedirectPage:
-            logging.warning(u"Destination page {title} is a redirect, posting cancelled.".format(title=destPage.title()))
+            logging.warning("Destination page {title} is a redirect, posting cancelled.".format(title=destPage.title()))
             return False
 
         # What language are we posting to?
@@ -540,8 +540,8 @@ class SuggestBot:
 
         # We're currently struggling to post to large pages on en-wiki.  If the destination
         # page is >1MB, skip posting, anticipating that it'll be shorter next time.
-        if lang == u'en' and len(pageSource.encode('utf-8')) > 1024*1024:
-            logging.warning(u"Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'))
+        if lang == 'en' and len(pageSource.encode('utf-8')) > 1024*1024:
+            logging.warning("Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'))
             return False
 
         # Create new page source by adding or replacing suggestions
@@ -551,8 +551,8 @@ class SuggestBot:
 
         # if testing, print the proposed userpage
         if config.testrun:
-            print "SuggestBot is doing a test run. Here's the new page:"
-            print newPageSource.encode('utf-8')
+            print("SuggestBot is doing a test run. Here's the new page:")
+            print(newPageSource.encode('utf-8'))
         else:
             # Make an edit to save the new page contents...
             try:
@@ -621,7 +621,7 @@ class SuggestBot:
         # Check if the user is blocked.  Since that will aport posting, there's
         # no need to spend time generating recommendations.
         if recUser.isBlocked():
-            sys.stderr.write(u"SBot Warning: User:{username} is blocked, posting aborted.\n".format(username=recUser.username).encode('utf-8'));
+            sys.stderr.write("SBot Warning: User:{username} is blocked, posting aborted.\n".format(username=recUser.username).encode('utf-8'));
             return False;
 
         # What language are we posting to?
@@ -635,11 +635,11 @@ class SuggestBot:
             else:
                 destPage = recUser.getUserTalkPage();
             pageSource = destPage.get();
-            if lang == u'en' and len(pageSource.encode('utf-8')) > 1024*1024:
-                sys.stderr.write(u"SBot Warning: Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!\n".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'));
+            if lang == 'en' and len(pageSource.encode('utf-8')) > 1024*1024:
+                sys.stderr.write("SBot Warning: Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!\n".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'));
                 return False;
         except pywikibot.exceptions.IsRedirectPage:
-            sys.stderr.write(u"SuggestBot Warning: Destination page {title} is a redirect, posting cancelled.\n".format(title=destPage.title()).encode('utf-8'));
+            sys.stderr.write("SuggestBot Warning: Destination page {title} is a redirect, posting cancelled.\n".format(title=destPage.title()).encode('utf-8'));
             return False;
         except pywikibot.exceptions.NoPage:
             pass;
@@ -652,7 +652,7 @@ class SuggestBot:
         # if none, post?
         if not "recs" in userRecs \
                 or not userRecs["recs"]:
-            sys.stderr.write(u"SBot Warning: Got no recommendations for User:{username}\n".format(username=recUser.username).encode('utf-8'));
+            sys.stderr.write("SBot Warning: Got no recommendations for User:{username}\n".format(username=recUser.username).encode('utf-8'));
             return False;
         # else, create recs message
         recMsg = self.createRecsPage(userRecs["recs"], recTemplate=recTemplate,
@@ -808,42 +808,42 @@ class SuggestBot:
         regularsTable = config.regulars_table
 
         # Query to get all regular users of the current language versions
-        getRegularsQuery = ur"""SELECT *
+        getRegularsQuery = r"""SELECT *
                                 FROM {regtable}
                                 WHERE lang=%(lang)s
                                 AND active=1
                                 AND retired=0""".format(regtable=regularsTable)
 
         # Query to update a specific user's status (to processing|idle|ready)
-        setStatusQuery = ur"""UPDATE {regtable} SET status=%(status)s
+        setStatusQuery = r"""UPDATE {regtable} SET status=%(status)s
                               WHERE lang=%(lang)s
                               AND username=%(username)s""".format(regtable=regularsTable)
 
         # Query to update a specific user's last recommendation time
-        setLastrecQuery = ur"""UPDATE {regtable}
+        setLastrecQuery = r"""UPDATE {regtable}
                                SET last_rec=%(rectime)s
                                WHERE lang=%(lang)s
                                AND username=%(username)s""".format(regtable=regularsTable)
 
         # Query to set (or reset) the busy bit in the status info table
-        updateStatusTableQuery = ur"""UPDATE {status}
+        updateStatusTableQuery = r"""UPDATE {status}
                                       SET daily_running=%(status)s
                                       WHERE lang=%(lang)s""".format(status=statusTable)
 
         # Query to check the busy bit in the status info table, so that
         # multiple updates don't run at the same time (otherwise we'll get
         # double-posts (how do we know that?  we tested it!))
-        checkStatusTableQuery = ur"""SELECT daily_running FROM {status}
+        checkStatusTableQuery = r"""SELECT daily_running FROM {status}
                                      WHERE lang=%(lang)s""".format(status=statusTable,)
 
         # Query to get the time of the last suggestion posted
-        getLastRecQuery = ur"""SELECT MAX(last_rec) AS last_rec
+        getLastRecQuery = r"""SELECT MAX(last_rec) AS last_rec
                                FROM {regtable}
                                WHERE lang=%(lang)s
                                AND active=1""".format(regtable=regularsTable)
 
         # query to increment the number of recommendations count
-        incRecCountQuery = ur'''UPDATE {regtable}
+        incRecCountQuery = r'''UPDATE {regtable}
                                 SET n_recs=n_recs+1
                                 WHERE lang=%(lang)s
                                 AND username=%(user)s'''.format(regtable=regularsTable)
@@ -866,7 +866,7 @@ class SuggestBot:
         dbcursor.fetchall() # flush cursor
 
         if ord(row['daily_running']):
-            logging.warning(u"SuggestBot is already posting to users on {0}-WP, exiting!".format(lang))
+            logging.warning("SuggestBot is already posting to users on {0}-WP, exiting!".format(lang))
             return True
 
         # Update the status of busyness to pretty busy...
@@ -936,7 +936,7 @@ class SuggestBot:
                     recTemplate = config.templates[lang][design]
                 except KeyError:
                     pass
-                logging.info(u"found design {0} with template {1}".format(design, recTemplate))
+                logging.info("found design {0} with template {1}".format(design, recTemplate))
 
             # If user supplied a sub-page to post to, UTF-8ify it.
             if pagetitle and not isinstance(pagetitle, unicode):
@@ -1002,7 +1002,7 @@ class SuggestBot:
                                               'username': user['username']})
             dbconn.commit()
 
-            logging.info(u"now getting recs for User:{username}".format(username=user['username']))
+            logging.info("now getting recs for User:{username}".format(username=user['username']))
 
             # Get recommendations and post...
             # Design and template is passed along based on what we looked
@@ -1034,7 +1034,7 @@ class SuggestBot:
                     
                 dbconn.commit()
                 # post to stdout saying yay!
-                logging.info(u"Posted recs to User:{username}".format(username=user['username']))
+                logging.info("Posted recs to User:{username}".format(username=user['username']))
 
         # Update the status of busyness to pretty unbusy...
         dbcursor.execute(updateStatusTableQuery, {'status': 0,
