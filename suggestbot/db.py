@@ -58,7 +58,7 @@ class SuggestBotDatabase:
                                         use_unicode=True)
             self.cursor = self.conn.cursor(cursors.SSDictCursor)
             return True
-        except MySQLdb.Error, e:
+        except MySQLdb.Error as e:
             logging.error("Unable to connect to database.")
             logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
             return False
@@ -75,7 +75,7 @@ class SuggestBotDatabase:
                 self.conn.close()
                 self.conn = None
             return True;
-        except MySQLdb.Error, e:
+        except MySQLdb.Error as e:
             logging.error("Unable to disconnect from database.")
             logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
             return False
