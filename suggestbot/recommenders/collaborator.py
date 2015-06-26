@@ -298,8 +298,8 @@ class CollabRecommender:
         # Find nhood of top k users
         k = 250  # Larger nhood for more recs, hopefully
         recs = sorted(user_assoc.items(),
-                       key=operator.attrgetter('assoc'),
-                       reversed=True)[:k]
+                      key=operator.attrgetter('assoc'),
+                      reverse=True)[:k]
         return recs
 
     def user_association(self, user, basket):
