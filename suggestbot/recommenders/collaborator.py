@@ -213,7 +213,7 @@ class CollabRecommender:
         coeditors = {}
         recs = []
 
-        logging.info("user {0}:".format(user_for_query))
+        logging.info("user {0}:".format(username))
 
         user = ""
         num_edits = 0
