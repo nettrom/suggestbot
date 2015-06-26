@@ -85,6 +85,86 @@ class CollabRecommender:
         # Database connection and cursor
         self.dbconn = None
         self.dbcursor = None
+        
+    def recommend(self, contribs, username, lang, nrecs = 100, threshold = 3, backoff = 0):
+
+        '''
+        Find `nrecs` number of neighbours for a given user based on
+        the overlap between their contributions.
+
+        :param contribs: The user's contributions
+        :type contribs: list
+
+        :param username: Username of the user we're recommending for
+        :type username: str
+
+        :param lang: Language code of the Wikipedia we're working on
+        :type lang: str
+
+        :param nrecs: Number of recommendations we seek
+        :type nrecs: int
+
+        :param threshold: Number of articles in common to be determined a neighbour
+        :type threshold: int
+
+        :param backoff: Do we apply a backoff strategy on the threshold?
+        :type backoff: int
+        '''
+
+        # Override default variables with supplied parameters
+        self.lang = lang
+        self.nrecs = nrecs
+        self.thresh  = threshold
+        self.backoff = backoff
+
+        # SQL queries are defined here so as to not perform the string
+        # formatting multiple times.
+        self.get_articles_by_user_query = """SELECT rev_title
+             FROM {revision_table}
+             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
+
+        # Query to get edited articles for a user who is above the threshold,
+        # we then disregard minor edits and reverts.
+        self.get_articles_by_expert_user_query = """SELECT rev_title
+             FROM {revision_table}
+             WHERE rev_user = %(username)s
+             AND rev_is_minor = 0
+             AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[lang])
+
+        # Query to get the number of edits a user has made (in our dataset)
+        self.get_editcount_query = """SELECT count(*) AS numedits
+             FROM {revision_table}
+             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
+
+        logging.info("Got request for user {0}:{1} to recommend based on {2} edits!".format(lang, username, len(contribs)))
+
+        # Recommendations we'll be returning
+        recs = []
+
+        database = db.SuggestBotDatabase()
+        if not database.connect():
+            logging.error("Failed to connect to SuggestBot database")
+            return(recs)
+
+        (self.dbconn, self.dbcursor) = database.getConnection()
+
+        # Turn contributions into a set, as we'll only use it that way
+        contribs = set(contribs)
+
+        # Get some recs.
+        recs = self.get_recs_at_coedit_threshold(username, contribs)
+
+        # If we're allowed to back off on the coedit threshold and don't have enough
+        # recs, ease off on the threshold and try again.
+        needed = nrecs - len(recs)
+        while backoff and self.thresh >= self.min_thresh and needed:
+            self.thresh -= 1
+            logging.info('Co-edit threshold is now {0}'.format(self.thresh))
+            recs = self.get_recs_at_coedit_threshold(username, contribs)
+            needed = nrecs = len(recs)
+
+        # Return truncated to nrecs, switched from list of objects to list of dicts
+        return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
 
     def get_recs_at_coedit_threshold(username, contribs):
         '''
@@ -263,83 +343,3 @@ class CollabRecommender:
         union = len(user_edits | basket)
         assoc = float(shared) / union
         return(assoc, shared)
-
-    def recommend(self, contribs, username, lang, nrecs = 100, threshold = 3, backoff = 0):
-
-        '''
-        Find `nrecs` number of neighbours for a given user based on
-        the overlap between their contributions.
-
-        :param contribs: The user's contributions
-        :type contribs: list
-
-        :param username: Username of the user we're recommending for
-        :type username: str
-
-        :param lang: Language code of the Wikipedia we're working on
-        :type lang: str
-
-        :param nrecs: Number of recommendations we seek
-        :type nrecs: int
-
-        :param threshold: Number of articles in common to be determined a neighbour
-        :type threshold: int
-
-        :param backoff: Do we apply a backoff strategy on the threshold?
-        :type backoff: int
-        '''
-
-        # Override default variables with supplied parameters
-        self.lang = lang
-        self.nrecs = nrecs
-        self.thresh  = threshold
-        self.backoff = backoff
-
-        # SQL queries are defined here so as to not perform the string
-        # formatting multiple times.
-        self.get_articles_by_user_query = """SELECT rev_title
-             FROM {revision_table}
-             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
-
-        # Query to get edited articles for a user who is above the threshold,
-        # we then disregard minor edits and reverts.
-        self.get_articles_by_expert_user_query = """SELECT rev_title
-             FROM {revision_table}
-             WHERE rev_user = %(username)s
-             AND rev_is_minor = 0
-             AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[lang])
-
-        # Query to get the number of edits a user has made (in our dataset)
-        self.get_editcount_query = """SELECT count(*) AS numedits
-             FROM {revision_table}
-             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
-
-        logging.info("Got request for user {0}:{1} to recommend based on {2} edits!".format(lang, username, len(contribs)))
-
-        # Recommendations we'll be returning
-        recs = []
-
-        database = db.SuggestBotDatabase()
-        if not database.connect():
-            logging.error("Failed to connect to SuggestBot database")
-            return(recs)
-
-        (self.dbconn, self.dbcursor) = database.getConnection()
-
-        # Turn contributions into a set, as we'll only use it that way
-        contribs = set(contribs)
-
-        # Get some recs.
-        recs = get_recs_at_coedit_threshold(username, contribs)
-
-        # If we're allowed to back off on the coedit threshold and don't have enough
-        # recs, ease off on the threshold and try again.
-        needed = nrecs - len(recs)
-        while backoff and self.thresh >= self.min_thresh and needed:
-            self.thresh -= 1
-            logging.info('Co-edit threshold is now {0}'.format(self.thresh))
-            recs = get_recs_at_coedit_threshold(username, contribs)
-            needed = nrecs = len(recs)
-
-        # Return truncated to nrecs, switched from list of objects to list of dicts
-        return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
