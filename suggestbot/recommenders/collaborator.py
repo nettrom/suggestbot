@@ -121,21 +121,21 @@ class CollabRecommender:
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.
         self.get_articles_by_user_query = """SELECT rev_title
-             FROM {coedit_table}
-             WHERE rev_user = %(username)s""".format(coedit_table=config.coedit_table[lang])
+             FROM {revision_table}
+             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
 
         # Query to get edited articles for a user who is above the threshold,
         # we then disregard minor edits and reverts.
         self.get_articles_by_expert_user_query = """SELECT rev_title
-             FROM {coedit_table}
+             FROM {revision_table}
              WHERE rev_user = %(username)s
              AND rev_is_minor = 0
-             AND rev_comment_is_revert = 0""".format(coedit_table=config.coedit_table[lang])
+             AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[lang])
 
         # Query to get the number of edits a user has made (in our dataset)
         self.get_editcount_query = """SELECT count(*) AS numedits
-             FROM {coedit_table}
-             WHERE rev_user = %(username)s""".format(coedit_table=config.coedit_table[lang])
+             FROM {revision_table}
+             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
 
         logging.info("Got request for user {0}:{1} to recommend based on {2} edits!".format(lang, username, len(contribs)))
 
@@ -193,19 +193,19 @@ class CollabRecommender:
         # First query gets users who made non-minor, non-reverting edits
         # to this article.  These are _always_ potential neighbours.
         get_users_by_article_query = """SELECT DISTINCT rev_user
-        FROM {coedit_table}
+        FROM {revision_table}
         WHERE rev_title = %(title)s
         AND rev_is_minor = 0
-        AND rev_comment_is_revert = 0""".format(coedit_table=config.coedit_table[self.lang])
+        AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[self.lang])
 
         # Second query gets the other users (either minor or reverting),
         # these are only interesting if they're below the threshold for total
         # number of edits, as they otherwise know what they were doing.
         get_minor_users_by_article_query = """SELECT DISTINCT rev_user
-        FROM {coedit_table}
+        FROM {revision_table}
         WHERE rev_title = %(title)s
         AND (rev_is_minor = 1
-        OR rev_comment_is_revert = 1)""".format(coedit_table=config.coedit_table[self.lang])
+        OR rev_comment_is_revert = 1)""".format(revision_table=config.revision_table[self.lang])
 
         # How many different users have coedited a given item with something
         # in the basket
