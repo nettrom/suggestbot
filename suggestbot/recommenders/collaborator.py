@@ -264,8 +264,7 @@ class CollabRecommender:
         assoc = float(shared) / union
         return(assoc, shared)
 
-     def recommend(self, contribs, username, lang,
-                  nrecs = 100, threshold = 3, backoff = 0):
+    def recommend(self, contribs, username, lang, nrecs = 100, threshold = 3, backoff = 0):
 
         '''
         Find `nrecs` number of neighbours for a given user based on
