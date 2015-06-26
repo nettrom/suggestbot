@@ -223,6 +223,8 @@ class CollabRecommender:
         num_edits = 0
         page_title = ""
         
+        print(contribs)
+        
         for item in contribs:
             # For each article the user has edited, find other editors.
             other_editors = {}
