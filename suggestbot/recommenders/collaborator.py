@@ -226,13 +226,13 @@ class CollabRecommender:
             
             # First we get major stakeholders in the article (non-minor/non-reverting edits)
             try:
-                cursor.execute(get_users_by_article_query,
+                self.dbcursor.execute(get_users_by_article_query,
                                {'title': item})
             except MySQLdb.Error:
                 logging.error("unable to execute query to get users by article")
                 return(recs)
 
-            for row in cursor:
+            for row in self.dbcursor:
                 user = row['rev_user']
                 if user == username: # user can't be their own neighbour
                     continue
@@ -247,13 +247,13 @@ class CollabRecommender:
             # Users we've seen (so we don't re-run SQL queries all the time)...
             seen_minors = {}
             try:
-                cursor.execute(get_minor_users_by_article_query,
+                self.dbcursor.execute(get_minor_users_by_article_query,
                                {'title': item})
             except MySQLdb.Error:
                 logging.error("unable to execute query to get users by article")
                 return(recs)
 
-            for row in cursor:
+            for row in self.dbcursor:
                 if user == username \
                    or user in coeditors \
                    or user in other_editors:
@@ -263,7 +263,7 @@ class CollabRecommender:
 
             for username in seen_minors.keys():
                 try:
-                    cursor.execute(get_editcount_query,
+                    self.dbcursor.execute(get_editcount_query,
                                    {'username': username})
                 except MySQLdb.Error:
                     logging.error("unable to execute query to get editcount for user")
@@ -320,7 +320,7 @@ class CollabRecommender:
         user_editcount = 0
         self.dbcursor.execute(self.get_editcount_query,
                               {'username': user})
-        for row in cursor:
+        for row in self.dbcursor:
             user_editcount = row['numedits']
 
         # Grab the users edits...
