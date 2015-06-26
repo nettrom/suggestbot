@@ -337,7 +337,7 @@ class CollabRecommender:
             dbcursor.execute(self.get_articles_by_user_query,
                              {'username': user})
         for row in dbcursor:
-            user_edits.add(row'rev_title'])
+            user_edits.add(row['rev_title'])
 
         # Calculate association using the Jaccard Coefficient
         shared = len(user_edits & basket)

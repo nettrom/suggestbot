@@ -41,8 +41,8 @@ import mwparserfromhell as mwp
 from datetime import datetime, timedelta
 from random import shuffle
 
-import config
-import db
+from suggestbot import config
+from suggestbot import db
 
 # FIXME: use RegularUser object from RegularUserUpdater
 # since that has all the parameters

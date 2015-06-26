@@ -16,7 +16,7 @@ scriptdir=`pwd`;
 export PYWIKIBOT2_DIR='/export/scratch/morten/suggestbot/pywikibot';
 # export PYWIKIPEDIA_DIR='/export/scratch/morten/work/SuggestBot/pywikipedia';
 export SUGGESTBOT_DIR=$scriptdir;
-export PYTHONPATH=$SUGGESTBOT_DIR/suggestbot
+export PYTHONPATH=$SUGGESTBOT_DIR
 export NLTK_DATA=$scriptdir/nltk_data
 
 # Load SuggestBot's own virtual environment
