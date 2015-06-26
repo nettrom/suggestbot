@@ -176,12 +176,6 @@ class CollabRecommender:
         :param contribs: Contributions we're recommending based on
         :type contribs: set
         '''
-
-        # Must have this template in the page
-        template_filter = param_map_ref['template-filter']
-        
-        # Neighbours must have at least this much association.
-        association_threshold = param_map_ref['association-threshold']
         
         # NOTE: because rev_user and rev_title currently are VARCHAR(255) and UTF-8,
         # they're assumed to consume ~765 bytes in memory, and therefore MySQL chooses
@@ -286,7 +280,7 @@ class CollabRecommender:
                 coeditors[username] = user_obj
 
                 (assoc, shared) = self.user_association(username, contribs)
-                if assoc < association_threshold:
+                if assoc < self.assoc_thresh:
                     continue
 
                 user_obj.assoc = assoc
