@@ -166,7 +166,7 @@ class CollabRecommender:
         # Return truncated to nrecs, switched from list of objects to list of dicts
         return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
 
-    def get_recs_at_coedit_threshold(username, contribs):
+    def get_recs_at_coedit_threshold(self, username, contribs):
         '''
         Get recommendations of other users based on a set of contributions.
 
@@ -285,7 +285,7 @@ class CollabRecommender:
                 # Add user to coeditors so we'll skip this user later
                 coeditors[username] = user_obj
 
-                (assoc, shared) = user_association(username, contribs)
+                (assoc, shared) = self.user_association(username, contribs)
                 if assoc < association_threshold:
                     continue
 
@@ -301,7 +301,7 @@ class CollabRecommender:
                        reversed=True)[:k]
         return recs
 
-    def user_association(user, basket):
+    def user_association(self, user, basket):
         '''
         Calculate the association between a given user and a basket
         of edits.  A user has to have at least self.exp_thresh edits
