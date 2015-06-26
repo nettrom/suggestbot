@@ -239,7 +239,7 @@ class CollabRecommender:
                 return(recs)
 
             for row in self.dbcursor:
-                user = row['rev_user']
+                user = row{'rev_user'}
                 if user == username: # user can't be their own neighbour
                     continue
                 if  user in coeditor_map:
@@ -277,7 +277,7 @@ class CollabRecommender:
                     logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                     continue
 
-                if row['numedits'] >= self.exp_thresh:
+                if row{'numedits'} >= self.exp_thresh:
                     other_editors[username] = 1
 
             # Now we have all relevant stakeholders in the article, and can
@@ -329,7 +329,7 @@ class CollabRecommender:
         self.dbcursor.execute(self.get_edit_count_query,
                               {'username': user})
         for row in self.dbcursor:
-            user_editcount = row['numedits']
+            user_editcount = row{'numedits'}
 
         # Grab the users edits...
         if user_editcount >= self.xp_thresh:
@@ -339,7 +339,7 @@ class CollabRecommender:
             dbcursor.execute(self.get_articles_by_user_query,
                              {'username': user})
         for row in dbcursor:
-            user_edits.add(row['rev_title'])
+            user_edits.add(row{'rev_title'})
 
         # Calculate association using the Jaccard Coefficient
         shared = len(user_edits & basket)
