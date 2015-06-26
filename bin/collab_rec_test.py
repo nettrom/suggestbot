@@ -12,15 +12,14 @@ def __main__():
 
 	contribs = []
 
-	for (page, revid, time, comment) in user.contributions(128):
-		contribs.append(page.title)	
+	for (page, revid, time, comment) in user.contributions(128, namespaces = [0]):
+		contribs.append(page.title())	
 
 	rec = CollabRecommender()	
 
-	matches = rec.recommend(contribs, name, 'en', 10)
+	matches = rec.recommend(contribs, name, 'en', 10, backoff = 1)
 
-	for result in matches:
-		print("%s", result)
+	print(matches)
 
 	print("Matching complete")
 	
