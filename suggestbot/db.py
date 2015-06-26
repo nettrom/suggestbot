@@ -54,7 +54,7 @@ class SuggestBotDatabase:
         try:
             self.conn = MySQLdb.connect(read_default_file=self.default_file,
                                         charset='utf8')
-            self.cursor = self.conn.cursor()
+            self.cursor = self.conn.cursor(MySQLdb.cursors.DictCursor)
             return True
         except MySQLdb.Error as e:
             logging.error("Unable to connect to database.")
