@@ -135,7 +135,7 @@ class CollabRecommender:
              AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[lang])
 
         # Query to get the number of edits a user has made (in our dataset)
-        self.get_editcount_query = """SELECT count(*) AS numedits
+        self.get_edit_count_query = """SELECT count(*) AS numedits
              FROM {revision_table}
              WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
 
