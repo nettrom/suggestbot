@@ -86,7 +86,7 @@ class CollabRecommender:
         self.dbconn = None
         self.dbcursor = None
 
-    def recommend(contribs, username, lang,
+    def recommend(self, contribs, username, lang,
                   nrecs = 100, threshold = 3, backoff = 0):
 
         '''
@@ -115,7 +115,7 @@ class CollabRecommender:
         # Override default variables with supplied parameters
         self.lang = lang
         self.nrecs = nrecs
-        self.thresh  = thresh
+        self.thresh  = threshold
         self.backoff = backoff
 
         # SQL queries are defined here so as to not perform the string
@@ -142,12 +142,12 @@ class CollabRecommender:
         # Recommendations we'll be returning
         recs = []
 
-        db = db.SuggestBotDatabase()
-        if not db.connect():
+        database = db.SuggestBotDatabase()
+        if not database.connect():
             logging.error("Failed to connect to SuggestBot database")
             return(recs)
 
-        (self.dbconn, self.dbcursor) = db.getConnection()
+        (self.dbconn, self.dbcursor) = database.getConnection()
 
         # Turn contributions into a set, as we'll only use it that way
         contribs = set(contribs)
