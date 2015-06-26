@@ -270,7 +270,7 @@ class CollabRecommender:
 
             for username in seen_minors.keys():
                 try:
-                    self.dbcursor.execute(get_edit_count_query,
+                    self.dbcursor.execute(self.get_edit_count_query,
                                    {'username': username})
                 except MySQLdb.Error as e:
                     logging.error("unable to execute query to get editcount for user")
