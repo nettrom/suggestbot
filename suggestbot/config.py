@@ -675,7 +675,8 @@ teahouse_templates = {
 # its known synonyms (synonyms are redirects to the template)
 request_template = {
     'en': {"User:SuggestBot/suggest":
-            ["User:SuggestBot/th-suggest"],
+            ["User:SuggestBot/th-suggest",
+             "User:SuggestBot/wp-suggest"],
         },
     'no': {'Bruker:AnbefalingsBot/anbefaling':
             [],

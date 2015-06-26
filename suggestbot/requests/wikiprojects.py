@@ -4,7 +4,7 @@
 Library for handling suggestion requests for WikiProjects
 using the WikiProject X page and task template layout.
 
-Copyright (C) 2005-2015 SuggestBot Dev Group
+Copyright (C) 2015 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -23,40 +23,50 @@ Boston, MA  02110-1301, USA.
 '''
 
 import logging
+import requests
+
+import pywikibot
+import mwparserfromhell as mwp
 
 from reqhandler import RequestTemplateHandler
+
+from suggestbot import config
 
 ## Need a "WikiProjectRequest" object, or something similar,
 ## to hold information about the project request
 ## Also need some configuration variables: how many days between each update
 
+class WikiProjectRequest:
+    def __init__(self, projname, projpage):
+        '''
+        :param projname: Name of the WikiProject we're suggesting to
+        :type projname: str
+
+        :param projpage: Page we're posting suggestions to
+        :type projpage: str
+        '''
+        self.name = projname
+        self.page = projpage
+
 class WikiProjectHandler(RequestTemplateHandler):
     def __init__(self, lang=u'en',
-                 templates={u"User:SuggestBot/suggest": []},
-                 ignore_list=[],
                  name_pattern=ur'^WikiProject'):
         """
         Initialise an object that will handle WikiProject requests
         added to WikiProject pages.
 
-        
-        @param lang: What language Wikipedia we are working on
-        @type lang: unicode
+        :param lang: What language Wikipedia we are working on
+        :type lang: unicode
 
-        @param templates: Dictionary where each key is the title of a main template
-                          that we'll look for, and its corresponding value is a list
-                          of synonyms (through redirects).
-        @type templates: dict (unicode to list of unicode)
-
-        @param ignore_list: List of page titles we'll ignore when looking for references
-        @type ignore_list: list (of unicode strings)
-
-        @param name_pattern: Regular expression pattern to match names of pages,
+        :param name_pattern: Regular expression pattern to match names of pages,
                              if a page does not match this pattern it is not processed.
-        @type name_pattern: unicode
+        :type name_pattern: unicode
         """
         
-        super(self.__class__, self).__init__(lang, templates, ignore_list)
+        super(self.__class__, self).__init__(lang, {}, [])
+
+        self.template_pages = [config.wikiproj_template]
+        self.name_pattern = name_pattern
 
     def process_requests(self):
         ## 1: find all open requests
@@ -66,20 +76,41 @@ class WikiProjectHandler(RequestTemplateHandler):
         ##    1.2: https://tools.wmflabs.org/projanalysis/config.php
         ##         projects that want suggestions have suggestbot: true, need to have
         ##         a config variable with the subpage name for those projects
+        ## FIXME: add the URL to the configuration
         ## 2: process and update them
+
+        # 1: Find all open requests
+        wproj_reqs = {} # maps project name to project request object
+
+        template_page = pywikibot.Page(self.site, self.templates.keys()[0])
+        for tr_page in template_page.embeddedin(filter_redirects=False,
+                                                namespaces=[4],
+                                                content=True):
+            if tr_page.title() in self.ignoreList:
+                continue
+
+            if not tr_page.canBeEdited():
+                logging.warning('SuggestBot cannot edit {0} (page locked?), skipping'.format(tr_page.title()))
+                continue
+
+            logging.info('now processing request on {0}'.format(tr_page.title()))
+
+            parsed_text = mwp.parse(tr_page.get())
+            for template in parsed_text.filter_templates(recursive=True):
+                
+        
+
 
 def main():
     """
     Run some tests.
     """
 
-    import suggestbot
+    from suggestbot import SuggestBot
 
-    myBot = suggestbot.SuggestBot()
+    myBot = SuggestBot()
     myHandler = WikiProjectHandler(templates=templates);
-
-
-    logging.info(u"instantiated RequestTemplateHandler and SuggestBot objects, testing request handling...");
+    logging.info(u"instantiated WikiProjectHandler and SuggestBot objects, testing request handling...");
 
     try:
         recRequests = myHandler.getRequests();
