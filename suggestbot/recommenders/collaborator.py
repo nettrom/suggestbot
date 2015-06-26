@@ -277,8 +277,9 @@ class CollabRecommender:
                     logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                     continue
 
-                if row['numedits'] >= self.exp_thresh:
-                    other_editors[username] = 1
+                for row in self.dbcursor:
+                    if row['numedits'] >= self.exp_thresh:
+                        other_editors[username] = 1
 
             # Now we have all relevant stakeholders in the article, and can
             # compute the appropriate association.
