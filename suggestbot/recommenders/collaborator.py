@@ -191,8 +191,6 @@ class CollabRecommender:
         WHERE rev_title = %(title)s
         AND rev_is_minor = 0
         AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[self.lang])
-        
-        print("%s", get_users_by_article_query)
 
         # Second query gets the other users (either minor or reverting),
         # these are only interesting if they're below the threshold for total
@@ -203,7 +201,6 @@ class CollabRecommender:
         AND (rev_is_minor = 1
         OR rev_comment_is_revert = 1)""".format(revision_table=config.revision_table[self.lang])
         
-        print("%s", get_minor_users_by_article_query)
 
         # How many different users have coedited a given item with something
         # in the basket
@@ -232,8 +229,9 @@ class CollabRecommender:
             try:
                 self.dbcursor.execute(get_users_by_article_query,
                                {'title': item})
-            except MySQLdb.Error:
+            except MySQLdb.Error as e:
                 logging.error("unable to execute query to get users by article")
+                logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                 return(recs)
 
             for row in self.dbcursor:
@@ -253,8 +251,9 @@ class CollabRecommender:
             try:
                 self.dbcursor.execute(get_minor_users_by_article_query,
                                {'title': item})
-            except MySQLdb.Error:
+            except MySQLdb.Error as e:
                 logging.error("unable to execute query to get users by article")
+                logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                 return(recs)
 
             for row in self.dbcursor:
@@ -269,8 +268,9 @@ class CollabRecommender:
                 try:
                     self.dbcursor.execute(get_editcount_query,
                                    {'username': username})
-                except MySQLdb.Error:
+                except MySQLdb.Error as e:
                     logging.error("unable to execute query to get editcount for user")
+                    logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                     continue
 
                 if row['numedits'] >= self.exp_thresh:
