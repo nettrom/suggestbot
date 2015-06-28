@@ -736,6 +736,23 @@ wikiproject_suffix = {
     'h': ''
 }
 
+## WikiProject suggestion request parameters
+
+## Page name of the template used for WikiProject requests
+wikiproject_template = 'User:SuggestBot/wp-request'
+
+## URL for WikiProject X configuration data
+wikiproject_config_url = 'https://tools.wmflabs.org/projanalysis/config.php'
+
+## Subpage-name to post to for projects discovered through the WPX URL
+wikiproject_subpage = '/Edit articles'
+
+## List of pages to ignore requests from
+wikiproject_ignores = []
+
+## Number of days between updates of WikiProject suggestions
+wikiproject_delay = 7
+
 # Placeholder text added when a page would otherwise be empty,
 # used to make sure our edits actually get saved
 empty_placeholder = {
