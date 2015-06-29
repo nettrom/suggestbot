@@ -159,12 +159,12 @@ class CollabRecommender:
 
         # If we're allowed to back off on the coedit threshold and don't have enough
         # recs, ease off on the threshold and try again.
-        needed = nrecs - len(recs)
+        needed = nrecs - len(recs) > 0
         while backoff and self.thresh >= self.min_thresh and needed:
             self.thresh -= 1
             logging.info('Co-edit threshold is now {0}'.format(self.thresh))
             recs = self.get_recs_at_coedit_threshold(username, contribs)
-            needed = nrecs = len(recs)
+            needed = nrecs - len(recs)
 
         # Return truncated to nrecs, switched from list of objects to list of dicts
         return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
@@ -203,30 +203,24 @@ class CollabRecommender:
         AND (rev_is_minor = 1
         OR rev_comment_is_revert = 1)""".format(revision_table=config.revision_table[self.lang])
         
-
         # How many different users have coedited a given item with something
         # in the basket
         coedit_count = {}
 
-        # Find users who rated the given items
-        coeditor_map = {}
-        user_assoc = {}
-        user_shared = {}
-        
         # Found co-editors, and recommendations we'll return
         coeditors = {}
         recs = []
 
-        logging.info("user {0}:".format(username))
+        logging.info("recommending for user '{0}'".format(username))
 
         user = ""
         num_edits = 0
         page_title = ""
         
-        print(contribs)
-        
         for item in contribs:
             # For each article the user has edited, find other editors.
+            logging.info('checking article: {0}'.format(item))
+            
             other_editors = {}
             
             # First we get major stakeholders in the article (non-minor/non-reverting edits)
@@ -242,10 +236,12 @@ class CollabRecommender:
                 user = row['rev_user']
                 if user == username: # user can't be their own neighbour
                     continue
-                if  user in coeditor_map:
+                if user in coeditors:
                     continue
 
                 other_editors[user] = 1
+
+            logging.info('found {0} major stakeholders'.format(len(other_editors)))
                 
             # Then we check minor edits and reverts, and keep those users who are
             # not in the top 10% of users (see `self.exp_thresh`).
@@ -261,35 +257,47 @@ class CollabRecommender:
                 return(recs)
 
             for row in self.dbcursor:
-                if user == username \
-                   or user in coeditors \
-                   or user in other_editors:
+                user = row['rev_user']
+                if user == username:
+                    logging.info('user cannot be their own neighbour, skipping')
+                    continue
+                if user in coeditors:
+                    logging.info('already seen this user')
+                if user in other_editors:
+                    logging.info('user already major stakeholder')
                     continue
 
                 seen_minors[user] = 1
 
-            for username in seen_minors.keys():
+            logging.info('found {0} minor editors, checking edit counts'.format(
+                len(seen_minors)))
+                
+            for user in seen_minors.keys():
                 try:
                     self.dbcursor.execute(self.get_edit_count_query,
-                                   {'username': username})
+                                   {'username': user})
                 except MySQLdb.Error as e:
                     logging.error("unable to execute query to get editcount for user")
                     logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                     continue
 
                 for row in self.dbcursor:
-                    if row['numedits'] >= self.exp_thresh:
-                        other_editors[username] = 1
+                    if row['numedits'] < self.exp_thresh:
+                        other_editors[user] = 1
+
+            logging.info('found {0} other editors in total'.format(len(other_editors)))
 
             # Now we have all relevant stakeholders in the article, and can
             # compute the appropriate association.
-            for username in other_editors:
-                user_obj = RecUser(username, 0, 0)
+            for user in other_editors:
+                user_obj = RecUser(user, 0, 0)
                 
                 # Add user to coeditors so we'll skip this user later
-                coeditors[username] = user_obj
+                coeditors[user] = user_obj
 
-                (assoc, shared) = self.user_association(username, contribs)
+                (assoc, shared) = self.user_association(user, contribs)
+                logging.info('user={0}, assoc={1}, shared={2}'.format(
+                    user, assoc, shared))
                 if assoc < self.assoc_thresh:
                     continue
 
@@ -300,7 +308,7 @@ class CollabRecommender:
 
         # Find nhood of top k users
         k = 250  # Larger nhood for more recs, hopefully
-        recs = sorted(user_assoc.items(),
+        recs = sorted(coeditors.values(),
                       key=operator.attrgetter('assoc'),
                       reverse=True)[:k]
         return recs
@@ -333,13 +341,13 @@ class CollabRecommender:
             user_editcount = row['numedits']
 
         # Grab the users edits...
-        if user_editcount >= self.xp_thresh:
-            dbcursor.execute(self.get_articles_by_expert_user_query,
-                             {'username': user})
+        if user_editcount >= self.exp_thresh:
+            self.dbcursor.execute(self.get_articles_by_expert_user_query,
+                                  {'username': user})
         else:
-            dbcursor.execute(self.get_articles_by_user_query,
-                             {'username': user})
-        for row in dbcursor:
+            self.dbcursor.execute(self.get_articles_by_user_query,
+                                  {'username': user})
+        for row in self.dbcursor:
             user_edits.add(row['rev_title'])
 
         # Calculate association using the Jaccard Coefficient
