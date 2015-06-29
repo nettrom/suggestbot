@@ -21,6 +21,7 @@ Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 Boston, MA  02110-1301, USA.
 '''
 
+import re
 import logging
 
 from suggestbot.recommenders.collaborator import CollabRecommender
@@ -37,15 +38,30 @@ def main():
         # Add verbosity option
         cli_parser.add_argument('-v', '--verbose', action='store_true',
                                 help='I can has kittehtalkzalot?')
+
+        cli_parser.add_argument('member_file', type=str,
+                                help='path to member file')
+
+        cli_parser.add_argument('nrecs', type=int,
+                                help='number of recommendations per user')
         
         args = cli_parser.parse_args()
         
         if args.verbose:
                 logging.basicConfig(level=logging.DEBUG)
 
-        recommender = CollabRecommender()
-                
+        # Regular expression to match a member username in our membership file
+        member_re = re.compile('User talk[:](?P<username>[^\}]+)')
+
+        all_members = set()
+
+        with open(args.member_file, 'r') as infile:
+                for line in infile:
+                        match_obj = member_re.search(line.strip())
+                        all_members.add(match_obj.group('username'))
+               
         print("Beginning collaborator recommendation test")
+        recommender = CollabRecommender()
 
         members = ['Kieran4', 'Brendandh', 'Gog the Mild', 'Seitzd', 'Robotam',
                    'Keith-264', 'Nyth83', 'Mmuroya', 'Navy2004', 'Secutor7',
@@ -60,12 +76,15 @@ def main():
                         contribs.append(page.title())	
 
                 matches = recommender.recommend(contribs, member, 'en',
-                                                nrecs=10, backoff = 1)
+                                                nrecs=args.nrecs, backoff=1)
 
-                print("Recommendations for User:{0}".format(member))
-                for rec in matches:
-                        print("User:{0} score={1:.3}".format(rec['item'],
-                                                             rec['value']))
+                match_set = set([rec['item'] for rec in matches])
+                overlap = match_set & all_members
+
+                print('Got {n} recommendations for User:{user}'.format(n=len(match_set),
+                                                                       user=member))
+                print('Overlap with all members: {0}'.format(len(overlap)))
+
         print('Recommendation test complete')
 	
 if __name__ == "__main__":
