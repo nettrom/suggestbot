@@ -35,8 +35,8 @@ lang_codes={
     'sv': 'swedish',
     'pt': 'portuguese',
     'fa': 'persian',
-    'h': 'hungarian',
-    'r': 'russian',
+    'hu': 'hungarian',
+    'ru': 'russian',
 }
 
 # Edit comments used when posting recommendations
@@ -46,8 +46,8 @@ edit_comment = {
     'sv': "FörslagsBot rekommenderar dessa artiklar...",
     'pt': "SuggestBot recomenda estes artigos",
     'fa': 'SuggestBot recommends these articles...',
-    'h': 'SuggestBot recommends these articles...',
-    'r': 'SuggestBot предлагает следующие статьи...',
+    'hu': 'SuggestBot recommends these articles...',
+    'ru': 'SuggestBot предлагает следующие статьи...',
 }
 
 # Edit comments used when removing the request template
@@ -58,8 +58,8 @@ replace_comment = {
     'sv': "Tar bort FörslagsBots mall så förslag inte skickas fler gånger",
     'pt': "Modelo de pedido de SuggestBot removido para evitar postagens múltiplas",
     'fa': 'Removed SuggestBot request template to prevent multiple suggestions posts',
-    'h': 'Removed SuggestBot request template to prevent multiple suggestions posts',
-    'r': 'Удаление шаблона запроса к SuggestBot для предотвращения дублирования сообщений'
+    'hu': 'Removed SuggestBot request template to prevent multiple suggestions posts',
+    'ru': 'Удаление шаблона запроса к SuggestBot для предотвращения дублирования сообщений'
 }
 
 # Table names for database tables containing task categories
@@ -70,8 +70,8 @@ task_table = {
     'sv': 'svwiki_work_category_data',
     'pt': 'ptwiki_work_category_data',
     'fa': 'fawiki_work_category_data',
-    'h': 'huwiki_work_category_data',
-    'r': 'ruwiki_work_category_data'
+    'hu': 'huwiki_work_category_data',
+    'ru': 'ruwiki_work_category_data'
 }
 
 # Configuration of categories containing articles that need work.
@@ -107,8 +107,8 @@ stub_re = {
     "sv": r"[Ss]tubb", # Swedish
     "pt": r"!Esboços (sobre|por|maiores que)", # Portuguese
     'fa': r'مقاله‌های خرد',
-    'h': None,
-    'r': r"Незавершённые статьи",
+    'hu': None,
+    'ru': r"Незавершённые статьи",
 }
 
 tasks = {
@@ -328,11 +328,11 @@ tasks = {
             'exclusion': r'(Ofullständiga listor)|mallar',
         },
     },
-    'r': {
+    'ru': {
         'STUB': {
             'categories': [],
             'recurseCategories': {'Незавершённые статьи по темам':5},
-            'inclusion': stub_re['r'],
+            'inclusion': stub_re['ru'],
             'exclusion': None,
         },
         'WIKIFY': {
@@ -358,7 +358,7 @@ tasks = {
             'categories': [],
             'recurseCategories': {'Википедия:Изолированные статьи': 1},
             'inclusion': None,
-            'exclusion': stub_re['r'],
+            'exclusion': stub_re['ru'],
         },
         'OBJECTIVITY': {
             'categories': ['Википедия:Статьи, нейтральность которых поставлена под сомнение'],
@@ -519,12 +519,12 @@ rc_pickle = "../data/recentchanges-updatetitles-{0}.dat"
 # Number of days we keep revisions for, for each language
 rc_keep = {
     'en': 90,
-    'r': 274,
+    'ru': 274,
     'sv': 925,
     'pt': 720,
     'no': 1461,
     'fa': 1461,
-    'h': 1461
+    'hu': 1461
 }
 
 # Configuration of text tables used to store data
@@ -534,8 +534,8 @@ text_table = {
     'no': 'nowiki_solr_text',
     'pt': 'ptwiki_solr_text',
     'fa': 'fawiki_solr_text',
-    'h': 'huwiki_solr_text',
-    'r': 'ruwiki_solr_text',
+    'hu': 'huwiki_solr_text',
+    'ru': 'ruwiki_solr_text',
 }
 
 # Configuration of database tables used to store revision data
@@ -547,8 +547,8 @@ revision_table = {
     'sv': 'svwiki_revisions',
     'pt': 'ptwiki_revisions',
     'fa': 'fawiki_revisions',
-    'r': 'ruwiki_revisions',
-    'h': 'huwiki_revisions'
+    'ru': 'ruwiki_revisions',
+    'hu': 'huwiki_revisions'
 }
 
 # Configuration of URLs to query each language's Solr backend,
@@ -562,8 +562,8 @@ solr_baseurl = {
     'sv': "http://localhost:8080/solr/Swedish/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
     'pt': "http://localhost:8080/solr/Portuguese/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
     'fa': "http://localhost:8080/solr/Persian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'h': "http://localhost:8080/solr/Hungarian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'r': "http://localhost:8080/solr/Russian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
+    'hu': "http://localhost:8080/solr/Hungarian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
+    'ru': "http://localhost:8080/solr/Russian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
 }
 
 # Mapping language codes to URLs used to delete pages from Solr's
@@ -574,8 +574,8 @@ solr_delurl = {
     'sv': 'http://localhost:8080/solr/Swedish/update/json',
     'pt': 'http://localhost:8080/solr/Portuguese/update/json',
     'fa': 'http://localhost:8080/solr/Persian/update/json',
-    'h': 'http://localhost:8080/solr/Hungarian/update/json',
-    'r': 'http://localhost:8080/solr/Russian/update/json',
+    'hu': 'http://localhost:8080/solr/Hungarian/update/json',
+    'ru': 'http://localhost:8080/solr/Russian/update/json',
 }
 
 # Configuration of what templates to use.  Complete title
@@ -611,7 +611,7 @@ templates = {
         'request': 'Usuário(a):SuggestBot/Templates/Requests',
         'regulars': 'Usuário(a):SuggestBot/Templates/Regulars',
     },
-    'r': {
+    'ru': {
         'request': 'Участник:SuggestBot/Шаблоны/Запросы',
         'regulars': 'Участник:SuggestBot/Шаблоны/Регулярные',
     },
@@ -631,7 +631,7 @@ config_templare = {
              'userbox': 'Användare:FörslagsBot/användarruta', },
     'pt': { 'config': 'Usuário(a):SuggestBot/config',
              'userbox': 'Usuário(a):SuggestBot/userbox', },
-    'r': { 'config': 'Участник:SuggestBot/Настройка',
+    'ru': { 'config': 'Участник:SuggestBot/Настройка',
              'userbox': 'Участник:SuggestBot/userbox',
          },
     'fa': {
@@ -652,7 +652,7 @@ templater_stoplist = {
     'pt': [ 'Usuário(a):SuggestBot/config',
             'Usuário(a):SuggestBot/Getting suggestions regularly',
             'Usuário(a):SuggestBot/Obtendo sugestões regularmente'],
-    'r': [ 'Участник:SuggestBot/Настройка',
+    'ru': [ 'Участник:SuggestBot/Настройка',
             'Участник:SuggestBot/Регулярные рекомендации' ],
     'fa': [ 'کاربر:SuggestBot/config',
             'کاربر:SuggestBot/Getting suggestions regularly', ]
@@ -665,8 +665,8 @@ teahouse_templates = {
     'no': [],
     'pt': [],
     'fa': [],
-    'r': [],
-    'h': []
+    'ru': [],
+    'hu': []
 }
 
 # Templates used for one-time requests.
@@ -687,7 +687,7 @@ request_template = {
             [],
             'User:SuggestBot/suggest': [],
         },
-    'r': { 'Участник:SuggestBot/suggest': [],
+    'ru': { 'Участник:SuggestBot/suggest': [],
              'User:SuggestBot/suggest': [],
          },
     'fa': { 'کاربر:SuggestBot/suggest':
@@ -707,8 +707,8 @@ request_head_re = {
     'sv': ["[=]{1,3}\s*.*, dina förslag är på väg.*\s*[=]{1,3}"],
     'pt': [],
     'fa': [],
-    'r': [],
-    'h': []
+    'ru': [],
+    'hu': []
 }
 
 # Name of the category parameter used in Teahouse suggestions,
@@ -719,8 +719,8 @@ th_category = {
     'sv': 'kategori',
     'pt': '',
     'fa': '',
-    'r': '',
-    'h': ''
+    'ru': '',
+    'hu': ''
 }
 
 # Suffix used in category names to match WikiProject category names,
@@ -731,8 +731,8 @@ wikiproject_suffix = {
     'sv': '',
     'pt': '',
     'fa': '',
-    'r': '',
-    'h': ''
+    'ru': '',
+    'hu': ''
 }
 
 # Placeholder text added when a page would otherwise be empty,
@@ -743,8 +743,8 @@ empty_placeholder = {
     'sv': '<!-- Fyllkommentar från FörslagsBot, kan tas bort vid behov -->',
     'pt': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
     'fa': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
-    'r': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
-    'h': ''
+    'ru': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
+    'hu': ''
 }
 
 # Base-filename of file to store names of users where the configuration
@@ -776,7 +776,7 @@ template_parameters = {
         'substituir': 'replace',
         'nível': 'headlevel',
     },
-    'r': {
+    'ru': {
         'частота': 'frequency',
         'заменять': 'replace',
         'уровень': 'headlevel',
@@ -796,7 +796,7 @@ once_monthly = {
     'no': r"en gang i måneden",
     'sv': r"en gång i månaden",
     'pt': r"mensalmente|uma vez por mês",
-    'r': r"ежемесячно|раз в месяц",
+    'ru': r"ежемесячно|раз в месяц",
     'fa': r'monthly|once a month',
 }
 twice_monthly = {
@@ -804,7 +804,7 @@ twice_monthly = {
     'no': r"to ganger i måneden|annenhver uke",
     'sv': r"två gånger i månaden",
     'pt': r"quinzenalmente|duas vezes por mês",
-    'r': r"дважды в месяц",
+    'ru': r"дважды в месяц",
     'fa': r'twice a month|every two weeks',
 }
 weekly = {
@@ -813,7 +813,7 @@ weekly = {
     'no': r"en gang i uken",
     'sv': r"en gång i veckan",
     'pt': r"uma vez por semana|semanalmente",
-    'r': r"еженедельно|раз в неделю",
+    'ru': r"еженедельно|раз в неделю",
     'fa': r'(once a|every) week|weekly',
 }
 
@@ -825,7 +825,7 @@ rec_headers = {
     'no': '== Artikler du med glede kan redigere, fra AnbefalingsBot ==',
     'sv': '== Artiklar du kanske vill redigera, från FörslagsBot ==',
     'pt': '== Artigos que você gostaria de editar, de SuggestBot ==',
-    'r': '== Статьи, которые Вам возможно захочется исправить, от SuggestBot ==',
+    'ru': '== Статьи, которые Вам возможно захочется исправить, от SuggestBot ==',
     'fa': '== مقاله‌های پیشنهادی توسط ربات پیشنهاددهنده ==',
 }
 
@@ -834,7 +834,7 @@ rec_header_re = {
     'no': 'Artikler du med glede kan redigere, fra AnbefalingsBot',
     'sv': 'Artiklar du kanske vill redigera, från FörslagsBot',
     'pt': 'Artigos que você gostaria de editar, de SuggestBot',
-    'r': 'Статьи, которые Вам возможно захочется исправить, от SuggestBot',
+    'ru': 'Статьи, которые Вам возможно захочется исправить, от SuggestBot',
     'fa': 'مقاله‌های پیشنهادی توسط ربات پیشنهاددهنده',
 }
 
@@ -847,8 +847,8 @@ sub_header_re = {
     'sv': [],
     'pt': [],
     'fa': [],
-    'r': [],
-    'h': []
+    'ru': [],
+    'hu': []
 }
 
 # Regular expressions to match a Yes/No parameter value in
@@ -858,7 +858,7 @@ re_yes = {
     'no': r'\s*ja\s*',
     'sv': r'\s*ja\s*',
     'pt': r'\s*sim\s*',
-    'r': r'\s*да\s*',
+    'ru': r'\s*да\s*',
     'fa': r'\s*yes\s*',
 }
 re_no = {
@@ -866,7 +866,7 @@ re_no = {
     'no': r'\s*nei\s*',
     'sv': r'\s*nej\s*',
     'pt': r'\s*não\s*',
-    'r': r'\s*нет\s*',
+    'ru': r'\s*нет\s*',
     'fa': r'\s*no\s*',
 }
 
@@ -877,9 +877,9 @@ list_re = {
     'no': r'[Ll]iste[ _]over[ _]',
     'sv': r'[Ll]ista[ _]över[ _]',
     'pt': r'[Ll]ista[ _]de[ _]',
-    'h': r'[ _]listája$',
+    'hu': r'[ _]listája$',
     'fa': r'^فهرست',
-    'r': r'(^Список|(:Алфавитный[ _]|Хронологический[ _])список)|—[ _]список'
+    'ru': r'(^Список|(:Алфавитный[ _]|Хронологический[ _])список)|—[ _]список'
 }
 
 # P-value cutoffs for determining if an article-specific task suggestion
