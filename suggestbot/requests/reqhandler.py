@@ -264,6 +264,38 @@ class RequestTemplateHandler:
         # okay, done
         return found_articles
 
+    def get_category_pages(self, cat_page):
+        '''
+        Grab up to 128 articles from the given category and return them as a set.
+        If the category contains talk pages, the corresponding articles are added
+        instead.  The category will be traversed in reverse chronological order
+        by setting the `cmsort` parameter to `timestamp`, ref
+        https://www.mediawiki.org/wiki/API:Categorymembers
+        '''
+
+        cat_articles = set()
+        if cat_page.isCategoryRedirect():
+            try:
+                cat_page = cat_page.getCategoryRedirectTarget()
+            except pywikibot.exceptions.NoPage:
+                logging.warning(u"listed {title} redirects to a non-existent category".format(title=seedpage.title()))
+                return cat_articles
+
+        ## Grab category members from Main and Talk, reverse sort by
+        ## timestamp, a max of 128 pages.
+        for catmember in self.site.categorymembers(cat_page,
+                                                   namespaces=[0,1],
+                                                   sortby="timestamp",
+                                                   reverse=True,
+                                                   total=128):
+            if catmember.namespace() == 0:
+                cat_articles.add(catmember)
+            else:
+                cat_articles.add(catmember.toggleTalkPage())
+
+        # ok, done
+        return(cat_articles)
+
     def getRequests(self):
         """
         Returns a dictionary with referencing pages (as pywikbot.Page) as keys,

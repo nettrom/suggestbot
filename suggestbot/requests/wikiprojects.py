@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 import pywikibot
 import mwparserfromhell as mwp
 
+import request
 from reqhandler import RequestTemplateHandler
 
 from suggestbot import config
@@ -49,9 +50,6 @@ class WikiProjectRequest:
         self.name = projname
         self.page = projpage
         self.category = projcat
-
-        # Is it time to post again? Default is yes
-        self.update = True
 
 class WikiProjectHandler(RequestTemplateHandler):
     def __init__(self, lang=u'en',
@@ -88,6 +86,7 @@ class WikiProjectHandler(RequestTemplateHandler):
         '''
 
         wproj_reqs = {} # maps project name to project request object
+        wproj_queue = [] # project's we'll post suggestions to
 
         # Find transclusions of the WikiProject template
         template_page = pywikibot.Page(self.site, config.wikiproj_template)
@@ -140,23 +139,88 @@ class WikiProjectHandler(RequestTemplateHandler):
                     project['source'])
 
 
-        # Go through all requests and cancel the update flag for all
-        # projects we've posted to in the last `config.wikiproject_delay` days.
+        ## Go through all requests and add all projects where it's time
+        ## to post again to the project queue.
+        wproj_queue = []
         today = datetime.now(timezone.utc).date()
-        for project in wproj_reqs.items():
-            for (revid, revtime, revuse, revcomment) \
+        for project in wproj_reqs.values():
+            for (revid, revtime, revuser, revcomment) \
                 in project.page.getVersionHistory(total=50):
                 # NOTE: we assume we're found in < 50 revisions
-                if username == self.site.user() \
-                   and (today - revtime.date()).days < config.wikiproject_delay:
-                    project.update = False
+                if revuser == self.site.user() \
+                   and (today - revtime.date()).days >= config.wikiproject_delay:
+                    wproj_queue.append(project)
 
         # Go through all requests that are to be processed, fetch articles
         # from project categories
+        for project in wproj_queue:
+            if not project.category:
+                ## Figure out the WikiProject's category name, create the page
+                project.category = pywikibot.Page(
+                    self.site,
+                    "{catns}:{project}{suffix}".format(
+                        catns=self.site.category_namespace(),
+                        project=project.name,
+                        suffix=config.wikiproject_suffix))
 
-        # Get suggestions
+            project.pages = self.get_category_pages(project.category)
 
-        # Post suggestions
+        ## For each project in the queue, create the Request object,
+        ## update the database, get suggestions, complete the request
+        for project in wproj_queue:
+            rec_req = request.Request(lang=self.lang,
+                                      username=project.name
+                                      page=project.page,
+                                      revid=0,
+                                      timestamp=datetime.now(timezone.utc),
+                                      templates=[config.wikiproj_template],
+                                      seeds=[page.title() for page in project.pages],
+                                      sbDb=self.dbconn)
+            try:
+                rec_req.updateDatabase()
+            except request.RequestUpdateError:
+                logging.error(u"adding request info to database failed, unable to continue")
+                return(False)
+
+            userRecs = bot.getRecs(username=project.name,
+                                   isRequest=True,
+                                   requestId=rec_req.getId(),
+                                   interestPages=[page.title() for page in project.pages])
+            if not 'recs' in userRecs \
+               or not userRecs['recs']:
+                logging.warning("got no recommendations for {0}".format(project.name))
+                try:
+                    rec_req.setEndtime(newEndtime=datetime.now(timezone.utc))
+                    rec_req.setStatus(u'completed')
+                    rec_req.updateDatabase()
+                except request.RequestUpdateError:
+                    logging.error("failed to update data for request {reqid}".format(reqid=recRequest.getId()))
+                    return(False)
+                else:
+                    continue
+
+            # 3.1: if we get recommendations back... create full template substitution text...
+            recMsg = bot.createRecsPage(userRecs['recs']);
+            
+            # Post suggestions
+            ## Edit project.page ...
+            ## Basically: skip templates, comments, and things that start with <nowiki>
+            ## Delete other text nodes, and the table node, then add our new table.
+
+            # OK, we've posted suggestions, add the recs to the request object,
+            # update its status, and commit to the database
+            try:
+                rec_req.setRecs(recs=userRecs['recs'])
+                rec_req.setEndtime(newEndtime=datetime.now(timezone.utc))
+                rec_req.setStatus(u'completed')
+                rec_req.updateDatabase()
+            except request.RequestUpdateError:
+                logging.error("failed to update data for request {reqid}".format(reqid=recRequest.getId()))
+                return(False)
+
+        logging.info(u"all done!\n")
+        # ok, everything went well, done
+        return True
         
 
 
