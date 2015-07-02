@@ -21,4 +21,4 @@ export NLTK_DATA=$scriptdir/nltk_data
 
 # Load SuggestBot's own virtual environment
 # source /export/scratch/morten/sbotenv/bin/activate
-export PYTHON_EXECUTABLE="/export/scratch/morten/sb_py3env/bin/python"
+export PYTHON_EXECUTABLE="/export/scratch/evan/pyenvs/sb/bin/python"

@@ -23,6 +23,7 @@ Boston, MA  02110-1301, USA.
 
 import operator
 import logging
+import math
 
 import MySQLdb
 
@@ -30,7 +31,7 @@ from suggestbot import config
 from suggestbot import db
 
 class RecUser:
-    def __init__(self, username, assoc, shared):
+    def __init__(self, username, assoc, shared, cosine):
         '''
         Instantiate a user object.
     
@@ -43,15 +44,20 @@ class RecUser:
 
         :param shared: Number of shared articles edited
         :type shared: int
+
+        :param cosine: Cosine similarity between this user and the user
+                      we're recomending for.
+        :type cosine: float
         '''
 
         self.username = username
         self.assoc = assoc
         self.shared = shared
+        self.cosine = cosine
 
 class CollabRecommender:
     def __init__(self, lang='en', nrecs=100, threshold=3, backoff=0,
-                 min_threshold=1, assoc_threshold=0.0001, exp_threshold=18):
+                 min_threshold=1, assoc_threshold=0, exp_threshold=18):
         '''
         Instantiate an object for recommending collaborators.
 
@@ -89,7 +95,7 @@ class CollabRecommender:
         self.dbconn = None
         self.dbcursor = None
         
-    def recommend(self, contribs, username, lang, nrecs = 100, threshold = 3, backoff = 0):
+    def recommend(self, contribs, username, lang, nrecs = 100, threshold = 3, backoff = 0, test = 'jaccard'):
 
         '''
         Find `nrecs` number of neighbours for a given user based on
@@ -112,6 +118,9 @@ class CollabRecommender:
 
         :param backoff: Do we apply a backoff strategy on the threshold?
         :type backoff: int
+
+        :param test: Name of correlation test to return results from
+        :type param: str
         '''
 
         # Override default variables with supplied parameters
@@ -119,6 +128,7 @@ class CollabRecommender:
         self.nrecs = nrecs
         self.thresh  = threshold
         self.backoff = backoff
+        self.test = test
 
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.
@@ -155,7 +165,7 @@ class CollabRecommender:
         contribs = set(contribs)
 
         # Get some recs.
-        recs = self.get_recs_at_coedit_threshold(username, contribs)
+        recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
 
         # If we're allowed to back off on the coedit threshold and don't have enough
         # recs, ease off on the threshold and try again.
@@ -163,13 +173,13 @@ class CollabRecommender:
         while backoff and self.thresh >= self.min_thresh and needed:
             self.thresh -= 1
             logging.info('Co-edit threshold is now {0}'.format(self.thresh))
-            recs = self.get_recs_at_coedit_threshold(username, contribs)
+            recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
             needed = nrecs - len(recs)
 
         # Return truncated to nrecs, switched from list of objects to list of dicts
         return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
 
-    def get_recs_at_coedit_threshold(self, username, contribs):
+    def get_recs_at_coedit_threshold(self, username, contribs, test):
         '''
         Get recommendations of other users based on a set of contributions.
 
@@ -178,6 +188,9 @@ class CollabRecommender:
         
         :param contribs: Contributions we're recommending based on
         :type contribs: set
+
+        :param test: Name of the test to return results from
+        :type test: str
         '''
         
         # NOTE: because rev_user and rev_title currently are VARCHAR(255) and UTF-8,
@@ -290,26 +303,37 @@ class CollabRecommender:
             # Now we have all relevant stakeholders in the article, and can
             # compute the appropriate association.
             for user in other_editors:
-                user_obj = RecUser(user, 0, 0)
+                user_obj = RecUser(user, 0, 0, 0)
                 
                 # Add user to coeditors so we'll skip this user later
                 coeditors[user] = user_obj
 
-                (assoc, shared) = self.user_association(user, contribs)
-                logging.info('user={0}, assoc={1}, shared={2}'.format(
-                    user, assoc, shared))
+                (assoc, shared, cosine) = self.user_association(user, contribs)
+                logging.info('user={0}, assoc={1}, shared={2}, cosine={3}'.format(
+                    user, assoc, shared, cosine))
                 if assoc < self.assoc_thresh:
                     continue
 
                 user_obj.assoc = assoc
                 user_obj.shared = shared
+                user_obj.cosine = cosine
 
         logging.info("Found {0} pre-neighbours".format(len(coeditors)))
 
         # Find nhood of top k users
         k = 250  # Larger nhood for more recs, hopefully
-        recs = sorted(coeditors.values(),
+
+        if test == 'jaccard':
+                recs = sorted(coeditors.values(),
                       key=operator.attrgetter('assoc'),
+                      reverse=True)[:k]
+        elif test == 'cosine':
+                recs = sorted(coeditors.values(),
+                      key=operator.attrgetter('cosine'),
+                      reverse=True)[:k]
+        elif test == 'coedit':
+                recs = sorted(coeditors.values(),
+                      key=operator.attrgetter('shared'),
                       reverse=True)[:k]
         return recs
 
@@ -354,4 +378,5 @@ class CollabRecommender:
         shared = len(user_edits & basket)
         union = len(user_edits | basket)
         assoc = float(shared) / union
-        return(assoc, shared)
+        cosine = float(shared) / (math.sqrt(len(user_edits)) * math.sqrt(len(basket)))
+        return(assoc, shared, cosine)

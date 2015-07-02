@@ -48,6 +48,9 @@ def main():
 
         cli_parser.add_argument('nrecs', type=int,
                                 help='number of recommendations per user')
+
+        cli_parser.add_argument('test', type=str,
+                                help='type of test to return recommendations from')
         
         args = cli_parser.parse_args()
         
@@ -62,7 +65,10 @@ def main():
         with open(args.member_file, 'r') as infile:
                 for line in infile:
                         match_obj = member_re.search(line.strip())
-                        all_members.add(match_obj.group('username'))
+                        if match_obj is None:
+                                print("None object")
+                        else:
+                               all_members.add(match_obj.group('username'))
 
         # members = random.sample(all_members, args.k)
         recommender = CollabRecommender()
@@ -107,7 +113,7 @@ def main():
                         contribs.append(page.title())	
 
                 matches = recommender.recommend(contribs, member, 'en',
-                                                nrecs=args.nrecs, backoff=1)
+                                                nrecs=args.nrecs, backoff=1, test=args.test)
 
                 match_set = set([rec['item'] for rec in matches])
                 overlap = match_set & all_members
