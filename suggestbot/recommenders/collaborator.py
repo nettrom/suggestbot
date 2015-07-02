@@ -323,6 +323,7 @@ class CollabRecommender:
         # Find nhood of top k users
         k = 250  # Larger nhood for more recs, hopefully
 
+        # Return results sorted according to "test" parameter
         if test == 'jaccard':
                 recs = sorted(coeditors.values(),
                       key=operator.attrgetter('assoc'),
@@ -374,7 +375,7 @@ class CollabRecommender:
         for row in self.dbcursor:
             user_edits.add(row['rev_title'])
 
-        # Calculate association using the Jaccard Coefficient
+        # Calculate association using the Jaccard Coefficient and Cosine Similarity test
         shared = len(user_edits & basket)
         union = len(user_edits | basket)
         assoc = float(shared) / union
