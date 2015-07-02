@@ -57,7 +57,7 @@ class RecUser:
 
 class CollabRecommender:
     def __init__(self, lang='en', nrecs=100, threshold=3, backoff=0,
-                 min_threshold=1, assoc_threshold=0, exp_threshold=18):
+                 min_threshold=1, assoc_threshold=0.0001, exp_threshold=18):
         '''
         Instantiate an object for recommending collaborators.
 
