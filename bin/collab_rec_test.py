@@ -71,7 +71,11 @@ def main():
                                all_members.add(match_obj.group('username'))
 
         # members = random.sample(all_members, args.k)
-        recommender = CollabRecommender()
+        if args.test == 'coedit':
+                recommender = CollabRecommender(assoc_threshold=0)
+        else:
+                recommender = CollabRecommender()
+                
         site = pywikibot.Site('en') 
                
         print("Beginning collaborator recommendation test")
