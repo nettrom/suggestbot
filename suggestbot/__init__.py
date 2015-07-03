@@ -1,3 +1,3 @@
-from suggestbot.suggestbot import SuggestBot
+from suggestbot.suggestbot import SuggestBot, PageNotSavedError
 from suggestbot import config
 from suggestbot import db

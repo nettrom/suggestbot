@@ -739,13 +739,13 @@ wikiproject_suffix = {
 ## WikiProject suggestion request parameters
 
 ## Page name of the template used for WikiProject requests
-wikiproject_template = 'User:SuggestBot/wp-request'
+wikiproject_template = 'User:SuggestBot/WikiProject suggestions'
 
 ## URL for WikiProject X configuration data
 wikiproject_config_url = 'https://tools.wmflabs.org/projanalysis/config.php'
 
 ## Subpage-name to post to for projects discovered through the WPX URL
-wikiproject_subpage = '/Edit articles'
+wikiproject_subpage = 'Edit articles'
 
 ## List of pages to ignore requests from
 wikiproject_ignores = []

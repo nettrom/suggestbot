@@ -36,6 +36,7 @@ import request
 from reqhandler import RequestTemplateHandler
 
 from suggestbot import config
+from suggestbot import db
 
 class WikiProjectRequest:
     def __init__(self, projname, projpage,
@@ -52,11 +53,14 @@ class WikiProjectRequest:
         self.category = projcat
 
 class WikiProjectHandler(RequestTemplateHandler):
-    def __init__(self, lang=u'en',
-                 name_pattern=ur'^WikiProject'):
+    def __init__(self, bot, lang=u'en',
+                 name_pattern='^WikiProject'):
         """
         Initialise an object that will handle WikiProject requests
         added to WikiProject pages.
+
+        :param bot: The SuggestBot instance we will use to get and prepare suggestions
+        :type bot: suggestbot.SuggestBot
 
         :param lang: What language Wikipedia we are working on
         :type lang: unicode
@@ -68,30 +72,37 @@ class WikiProjectHandler(RequestTemplateHandler):
         
         super(self.__class__, self).__init__(lang=lang,
                                              templates={},
-                                             ignoreList=config.wikiproj_ignores)
+                                             ignoreList=config.wikiproject_ignores)
         self.name_pattern = re.compile(name_pattern, re.I)
-        self.wikiproj_template = config.wikiproj_template.lower()
+        self.wikiproject_template = config.wikiproject_template.lower()
 
+        self.bot = bot
+        self.db = db.SuggestBotDatabase()
+        
         # Regular expression for splitting a project page into project name
         # and sub page parts.
-        self.subpage_re = re.compile(ur'(?P<projname>[^/]+)(?P<subname>/.*)')
+        self.subpage_re = re.compile('(?P<projname>[^/]+)(?P<subname>/.*)')
 
-    def processs_requests(self):
+    def process_requests(self):
         '''
         Find and process all WikiProject requests for suggestions.  Requests
         are discovered through transclusions of the SuggestBot template for
-        WikiProject requests (`suggestbot.config.wikiproj_template`), and
+        WikiProject requests (`suggestbot.config.wikiproject_template`), and
         by polling the WikiProject X config URL
-        (`suggestbot.config.wikiproj_config_url`).
+        (`suggestbot.config.wikiproject_config_url`).
         '''
 
+        if not self.db.connect():
+            logging.error('unable to connect to SuggestBot database, exiting')
+            return False
+        
         wproj_reqs = {} # maps project name to project request object
         wproj_queue = [] # project's we'll post suggestions to
 
         # Find transclusions of the WikiProject template
-        template_page = pywikibot.Page(self.site, config.wikiproj_template)
+        template_page = pywikibot.Page(self.site, config.wikiproject_template)
         for tr_page in template_page.embeddedin(filter_redirects=False,
-                                                namespaces=[4],
+                                                namespaces=[3,4],
                                                 content=True):
             if tr_page.title() in self.ignoreList:
                 continue
@@ -105,7 +116,7 @@ class WikiProjectHandler(RequestTemplateHandler):
             parsed_text = mwp.parse(tr_page.get())
             for template in parsed_text.filter_templates(recursive=True):
                 template_name = template.name().strip().lower()
-                if template_name == self.wikiproj_template:
+                if template_name == self.wikiproject_template:
                     # page title (without namespace) must match project name pattern
                     if not self.name_pattern.match(tr_page.title(withNamespace=False)):
                         continue
@@ -124,32 +135,42 @@ class WikiProjectHandler(RequestTemplateHandler):
                         project_name, tr_page)
 
         # Poll the WikiProject X config url
-        req = requests.get(config.wikiproj_config_url)
+        req = requests.get(config.wikiproject_config_url)
         wpx_config = req.json()
         for project in wpx_config['projects']:
-            if project['suggestbot']:
-                project_page = pywikibot.Page(project['name'])
-                project_name = project.page.title(withNamespace=False)
-                project_post_page = pywikibot.Page('{0}{1}'.format(
-                    project_page, config.wikiproject_subpage))
+            print(project)
+            if 'suggestbot' in project and project['suggestbot']:
+                project_page = pywikibot.Page(self.site, project['name'])
+                project_name = project_page.title(withNamespace=False)
+                project_post_page = pywikibot.Page(
+                    self.site, '{project}/{subpage}'.format(
+                        project=project_page.title(),
+                        subpage=config.wikiproject_subpage))
+                project_category = pywikibot.Page(
+                    self.site, '{catns}:{source}'.format(
+                        catns=self.site.category_namespace(),
+                        source=project['source']))
 
-                ## Store this request, with category from 'source' parameter
+                ## Store the request
                 wproj_reqs[project_name] = WikiProjectRequest(
                     project_name, project_post_page,
-                    project['source'])
-
+                    project_category)
 
         ## Go through all requests and add all projects where it's time
         ## to post again to the project queue.
         wproj_queue = []
         today = datetime.now(timezone.utc).date()
         for project in wproj_reqs.values():
-            for (revid, revtime, revuser, revcomment) \
-                in project.page.getVersionHistory(total=50):
-                # NOTE: we assume we're found in < 50 revisions
-                if revuser == self.site.user() \
-                   and (today - revtime.date()).days >= config.wikiproject_delay:
-                    wproj_queue.append(project)
+            try:
+                for (revid, revtime, revuser, revcomment) \
+                    in project.page.getVersionHistory(total=50):
+                    # NOTE: we assume we're found in < 50 revisions
+                    if revuser == self.site.user() \
+                       and (today - revtime.date()).days >= config.wikiproject_delay:
+                        wproj_queue.append(project)
+            except pywikibot.exceptions.NoPage:
+                ## Page doesn't exist yet, we can go create it with suggestions
+                wproj_queue.append(project)
 
         # Go through all requests that are to be processed, fetch articles
         # from project categories
@@ -169,23 +190,24 @@ class WikiProjectHandler(RequestTemplateHandler):
         ## update the database, get suggestions, complete the request
         for project in wproj_queue:
             rec_req = request.Request(lang=self.lang,
-                                      username=project.name
+                                      username=project.name,
                                       page=project.page,
                                       revid=0,
                                       timestamp=datetime.now(timezone.utc),
-                                      templates=[config.wikiproj_template],
+                                      templates=[config.wikiproject_template],
                                       seeds=[page.title() for page in project.pages],
-                                      sbDb=self.dbconn)
+                                      sbDb=self.db)
             try:
                 rec_req.updateDatabase()
             except request.RequestUpdateError:
                 logging.error(u"adding request info to database failed, unable to continue")
                 return(False)
 
-            userRecs = bot.getRecs(username=project.name,
-                                   isRequest=True,
-                                   requestId=rec_req.getId(),
-                                   interestPages=[page.title() for page in project.pages])
+            userRecs = self.bot.getRecs(username=project.name,
+                                        isRequest=True,
+                                        requestId=rec_req.getId(),
+                                        interestPages=[page.title() for page in \
+                                                       project.pages])
             if not 'recs' in userRecs \
                or not userRecs['recs']:
                 logging.warning("got no recommendations for {0}".format(project.name))
@@ -199,14 +221,36 @@ class WikiProjectHandler(RequestTemplateHandler):
                 else:
                     continue
 
-            # 3.1: if we get recommendations back... create full template substitution text...
-            recMsg = bot.createRecsPage(userRecs['recs']);
+            # Turn recommendations into a complete wikitext subst-string
+            rec_msg = self.bot.createRecsPage(userRecs['recs']);
             
             # Post suggestions
-            ## Edit project.page ...
-            ## Basically: skip templates, comments, and things that start with <nowiki>
-            ## Delete other text nodes, and the table node, then add our new table.
+            parsed_text = mwp.parse(project.page.get())
+            ## Basically: skip noinclude (the page is supposed to be transcluded),
+            ## and the SuggestBot template. Delete everything else.
+            i = 0
+            while i < len(parsed_text.nodes):
+                node = parsed_text.nodes[i]
+                if (hasattr(node, 'tag') and node.tag == 'noinclude') \
+                   or (isinstance(node, mwp.nodes.template.Template)):
+                    i += 1
+                else:
+                    del(parsed_text.nodes[i])
 
+            project.page.text = '{current}{recs}'.format(
+                current=parsed_text, recs=rec_msg)
+
+            try:
+                print('We are only testing, here is the new page source')
+                print(project.page.text)
+                # project.page.save(summary=config.edit_comment, minor=False)
+            except pywikibot.exceptions.EditConflig:
+                logging.error('Posting recommendations to {page} failed, edit conflict, will try again later'.format(page=project.page.title()))
+                return False
+            except pywikibot.execptions.PageNotSaved as e:
+                logging.error('Failed posting recommendations to {page}, reason: {e_code} {e_text}'.format(page=project.page.title(), e_code=e.args[0], e_text=e.args[1]))
+                return False
+                
             # OK, we've posted suggestions, add the recs to the request object,
             # update its status, and commit to the database
             try:
@@ -218,11 +262,10 @@ class WikiProjectHandler(RequestTemplateHandler):
                 logging.error("failed to update data for request {reqid}".format(reqid=recRequest.getId()))
                 return(False)
 
+        self.db.disconnect()
         logging.info(u"all done!\n")
         # ok, everything went well, done
         return True
-        
-
 
 def main():
     """
@@ -231,39 +274,18 @@ def main():
 
     from suggestbot import SuggestBot
 
-    myBot = SuggestBot()
-    myHandler = WikiProjectHandler(templates=templates);
-    logging.info(u"instantiated WikiProjectHandler and SuggestBot objects, testing request handling...");
+    mybot = SuggestBot()
+    myhandler = WikiProjectHandler(mybot)
+
+    logging.info(u"instantiated WikiProjectHandler and SuggestBot objects, testing request handling...")
 
     try:
-        recRequests = myHandler.getRequests();
-        for (page, pageData) in recRequests.iteritems():
-            logging.info(u"Found the following templates on page {page}:".format(page=page.title()).encode('utf-8'))
-
-            for template in pageData['templates']:
-                logging.info(u"- {template}".format(template=template.title()).encode('utf-8'))
-
-            logging.info("\nIn the templates were listed the following articles:")
-
-            for intPage in pageData['articles']:
-                logging.info(u"- {page}".format(page=intPage.title()).encode('utf-8'))
-            logging.info("")
-
-        # Uncomment when doing live testing...
-        if not myHandler.db.connect():
-            logging.error("unable to connect to database");
-        else:
-            for (page, pageData) in recRequests.iteritems():
-                myHandler.processSingleRequest(userPage=page,
-                                               interestPages=pageData['articles'],
-                                               knownTemplates=pageData['templates'],
-                                               bot=myBot);
-            myHandler.db.disconnect();
+        myhandler.process_requests()
     finally:
-        myHandler.stopme();
-
+        pywikibot.stopme()
+        
     # OK, done...
-    return;
+    return
 
 if __name__ == "__main__":
-    main();
+    main()

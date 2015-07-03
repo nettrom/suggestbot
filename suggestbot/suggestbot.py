@@ -212,12 +212,10 @@ class SuggestBot:
                                                                        order=recData['rank'],
                                                                        title=recTitle)
 
-        # On English Wikipedia we currently run an experiment with popularity,
-        # quality, and task suggestions.  RequestTemplateHandler doesn't supply
-        # a user group, so if it is set, we know we're processing regular users.
-        if config.wp_langcode == 'en' \
-                and userGroup:
-            for (recTitle, recData) in recs.iteritems():
+        # On English Wikipedia, we have popularity & quality information available,
+        # so add that.
+        if config.wp_langcode == 'en':
+            for (recTitle, recData) in recs.items():
                 # Was popcount calculated?  If not, set it to an empty string,
                 # {{formatnum:}} appears to handle that nicely.
                 if not 'popcount' in recData \
@@ -291,7 +289,9 @@ class SuggestBot:
                 for task in all_tasks:
                     task_key = '{task}-no'.format(task=task)
                     # Add the parameter to not show any task needed
-                    paramString = "{params}|{task}{category}{order}={mapping}".format(params=paramString, task=task.upper(), category=recData['cat'], order=recData['rank'], mapping=config.task_map[task_key])
+                    paramString = "{params}|{task}{category}{order}={mapping}".format(
+                        params=paramString, task=task.upper(), category=recData['cat'],
+                        order=recData['rank'], mapping=config.task_map[task_key])
 
         # Now create the subst template which refers to
         # our self-defined message template, with the created string of parameters
@@ -300,8 +300,9 @@ class SuggestBot:
             recTemplate = config.templates[lang]['request']
 
         # Add in the template and parameters (note escaping of '{' with '{{')
-        recString = "{{{{subst:{template}{params}}}}} -- ~~~~".format(template=recTemplate,
-                                                                   params=paramString)
+        recString = "{{{{subst:{template}{params}}}}} -- ~~~~".format(
+            template=recTemplate,
+            params=paramString)
         return recString
 
     # FIXME: get a unit test case of the recommendation post thingamajig
