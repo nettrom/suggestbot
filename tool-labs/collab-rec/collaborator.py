@@ -257,6 +257,9 @@ class CollabRecommender:
         for item in contribs:
             # For each article the user has edited, find other editors.
             logging.info('checking article: {0}'.format(item))
+
+            # Translate " " to "_"
+            item = item.replace(" ", "_")
             
             other_editors = {}
             
