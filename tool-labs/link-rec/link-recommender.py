@@ -112,7 +112,7 @@ class LinkRecommender():
                         'hu': 'huwiki_p',
                         'fa': 'fawiki_p',
                         'ru': 'ruwiki_p'}
-        self.hostnames = {'en': 'enwiki.labsdb',
+        self.hostnames = {'en': 'c3.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
                           'pt': 'ptwiki.labsdb',
@@ -573,5 +573,4 @@ def app(envir, start_response):
     # print "Received %d recommendations." % (len(recs),);
 
 # Also, comment out these if you run from command line
-wsgi = WSGIServer(app);
-wsgi.run();
+WSGIServer(app).run()

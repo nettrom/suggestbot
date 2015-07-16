@@ -106,7 +106,7 @@ class InlinkTableUpdater:
                             'hu': 'huwiki_p',
                             'fa': 'fawiki_p',
                             'ru': 'ruwiki_p'}
-        self.hostnames = {'en': 'enwiki.labsdb',
+        self.hostnames = {'en': 'c3.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
                           'pt': 'ptwiki.labsdb',
@@ -199,13 +199,13 @@ class InlinkTableUpdater:
         createTempTableQuery = ur'''CREATE TEMPORARY TABLE
                                     {ilcTempTable}
                                     LIKE
-                                    {ilcTableName}''';
+                                    {ilcTableName}'''
 
         # Query to update the ILC table using values from the temporary table
         updateFromTempQuery = ur'''UPDATE {ilcTableName} ilc,
                                    {ilcTempTable} ilc_temp
                                    SET ilc.ilc_numlinks=ilc_temp.ilc_numlinks
-                                   WHERE ilc.ilc_page_id=ilc_temp.ilc_page_id''';
+                                   WHERE ilc.ilc_page_id=ilc_temp.ilc_page_id'''
 
         # Query to find articles that need to be deleted, the left join
         # means p.page_id is null for those pages.  This can take a little
@@ -214,7 +214,8 @@ class InlinkTableUpdater:
               ilc_page_id FROM
               {ilcTableName} ilc LEFT JOIN page p
               ON ilc.ilc_page_id=p.page_id
-              WHERE p.page_id IS NULL'''.format(ilcTableName=self.ilcTableNames[self.lang]);
+              WHERE p.page_id IS NULL'''.format(
+                  ilcTableName=self.ilcTableNames[self.lang])
         
         # Query to find new articles that need to be inserted, similar as the
         # previous query, except the roles are reversed.  We only care about
@@ -225,16 +226,17 @@ class InlinkTableUpdater:
               ON p.page_id=ilc.ilc_page_id
               WHERE p.page_namespace=0
               AND p.page_is_redirect=0
-              AND ilc.ilc_page_id IS NULL'''.format(ilcTableName=self.ilcTableNames[self.lang]);
+              AND ilc.ilc_page_id IS NULL'''.format(
+                  ilcTableName=self.ilcTableNames[self.lang])
 
-        # Query to find linked articles (namespace 0) from a given set of page IDs
+        # Query to find linked articles (namespace 0) from a set of pages
         getLinksQuery = ur'''SELECT p.page_id, p.page_is_redirect
                              FROM pagelinks pl JOIN page p
                              ON (pl.pl_namespace=p.page_namespace
                              AND pl.pl_title=p.page_title)
                              WHERE pl.pl_namespace=0
                              AND pl.pl_from IN ({pageidlist})
-                             GROUP BY p.page_id''';
+                             GROUP BY p.page_id'''
 
         # Query to resolve redirects (we discard double-redirects)
         resolveRedirectQuery = ur'''SELECT p.page_id, p.page_is_redirect
@@ -242,7 +244,7 @@ class InlinkTableUpdater:
                                     ON (r.rd_namespace=p.page_namespace
                                     AND r.rd_title=p.page_title)
                                     WHERE p.page_namespace=0
-                                    AND rd_from IN ({pageidlist})''';
+                                    AND rd_from IN ({pageidlist})'''
 
         # Query to insert a set of articles with their inlink count
         # into an ILC table
@@ -251,25 +253,27 @@ class InlinkTableUpdater:
                               p.page_id AS ilc_page_id,
                               COUNT(*) AS ilc_numlinks
                               FROM page p JOIN pagelinks pl ON
-                             (p.page_namespace=pl.pl_namespace AND p.page_title=pl.pl_title)
-                              JOIN page p2 ON pl.pl_from=p2.page_id
+                                 (p.page_namespace=pl.pl_namespace
+                                  AND p.page_title=pl.pl_title)
                               WHERE p.page_id IN ({idlist})
-                              AND p2.page_namespace=0
-                              GROUP BY p.page_id''';
+                              AND pl.pl_from_namespace=0
+                              GROUP BY p.page_id'''
 
         # Query to delete a page from the inlink count table
         deletePageQuery = ur'''DELETE FROM {ilcTableName}
-                               WHERE ilc_page_id IN ({idlist})''';
+                               WHERE ilc_page_id IN ({idlist})'''
 
         # Query to get the last update timestamp from the database
         getLastupdateQuery = ur'''SELECT ilcu_timestamp
                                   FROM {ilcUpdateTable}
-                                  WHERE ilcu_lang=%(lang)s'''.format(ilcUpdateTable=self.ilcUpdateTableName);
+                                  WHERE ilcu_lang=%(lang)s'''.format(
+                                      ilcUpdateTable=self.ilcUpdateTableName)
 
         # Query to set the last update timestamp from the database
         setLastupdateQuery = ur'''UPDATE {ilcUpdateTable}
                                   SET ilcu_timestamp=%(timestamp)s
-                                  WHERE ilcu_lang=%(lang)s'''.format(ilcUpdateTable=self.ilcUpdateTableName);
+                                  WHERE ilcu_lang=%(lang)s'''.format(
+                                      ilcUpdateTable=self.ilcUpdateTableName)
 
         # Query to get IDs and most recent edit timestamp
         # of non-redirecting articles (namespace 0)
@@ -282,7 +286,7 @@ class InlinkTableUpdater:
                                      WHERE rc.rc_namespace=0
                                      AND p.page_is_redirect=0
                                      AND rc.rc_timestamp >= %(timestamp)s
-                                     GROUP BY pageid''';
+                                     GROUP BY pageid'''
 
         # Query to get the newest timestamp of a main namespace
         # non-redirecting edit from recent changes
@@ -293,31 +297,33 @@ class InlinkTableUpdater:
                                         WHERE rc.rc_namespace=0
                                         AND p.page_is_redirect=0
                                         ORDER BY rc.rc_timestamp DESC
-                                        LIMIT 1''';
+                                        LIMIT 1'''
 
-        logging.info("Finding pages to delete".format(timestamp=datetime.utcnow()));
+        logging.info("Finding pages to delete")
 
         # 1: find pages that need to be deleted, and delete them
-        self.dbCursor.execute(findDeletedPagesQuery);
+        self.dbCursor.execute(findDeletedPagesQuery)
 
         # There shouldn't be too many pages that need to be deleted every time,
         # so we can just do a list comprehension to make a list of tuples we
         # can feed to executemany().
-        pagesToDelete = [str(row['ilc_page_id']) for row in self.dbCursor.fetchall()];
+        pagesToDelete = [str(row['ilc_page_id']) for row in self.dbCursor.fetchall()]
 
-        logging.info("Found {n} pages to delete.".format(n=len(pagesToDelete)));
+        logging.info("Found {n} pages to delete.".format(n=len(pagesToDelete)))
 
         i = 0;
         while i < len(pagesToDelete):
-            self.dbCursor.execute(deletePageQuery.format(ilcTableName=self.ilcTableNames[self.lang], idlist=",".join(pagesToDelete[i:i+self.sliceSize])));
-            logging.info("Deleted {n} rows.".format(n=self.dbCursor.rowcount));
+            self.dbCursor.execute(deletePageQuery.format(
+                ilcTableName=self.ilcTableNames[self.lang],
+                idlist=",".join(pagesToDelete[i:i+self.sliceSize])))
+            logging.info("Deleted {n} rows.".format(n=self.dbCursor.rowcount))
 
-            i += self.sliceSize;
+            i += self.sliceSize
 
-        self.dbConn.commit(); # commit changes
-        pagesToDelete = None; # this can be cleaned up...
+        self.dbConn.commit() # commit changes
+        pagesToDelete = None # this can be cleaned up...
 
-        logging.info("Completed page deletion, finding and inserting new articles...");
+        logging.info("Completed page deletion, finding and inserting new articles...")
 
         # 2: Find pages that need to be created, add those to our set of pages that
         #    need updating.
@@ -528,9 +534,9 @@ def main():
         # NOTE: disconnecting deletes the temporary table, they are
         #       on a per-connection basis in MySQL
     except UpdateRunningError:
-        logging.error("An update is already running for this wiki, exiting.");
+        logging.error("An update is already running for {lang}-wiki, exiting.".format(lang=args.lang))
     except UpdateTableError:
-        logging.error("Failed to update the status table, exiting.");
+        logging.error("Failed to update the status table, exiting.")
 
     # OK, done
     return;
