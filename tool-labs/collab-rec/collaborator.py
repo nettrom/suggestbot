@@ -31,10 +31,6 @@ import db
 ## Catching MySQL errors
 import MySQLdb
 
-from collections import deque
-
-## FIXME: potential speedup: caching edit counts, as we'll see users multiple times
-
 class RecUser:
     def __init__(self, username, assoc, shared, cosine):
         '''
@@ -106,6 +102,8 @@ class CollabRecommender:
         # Database connection and cursor
         self.dbconn = None
         self.dbcursor = None
+
+#---------------------------------------------------------------------------------------------------------------------
         
     def recommend(self, contribs, username, lang, cutoff,
                   nrecs=100, threshold=3, backoff=0, test = 'jaccard'):
@@ -146,9 +144,6 @@ class CollabRecommender:
         self.thresh  = threshold
         self.backoff = backoff
         self.test = test
-        
-        ## Mapping usernames to edit counts to identify experts/non-experts
-        self.editcount_map = {}
 
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.
@@ -199,16 +194,18 @@ class CollabRecommender:
 
         # If we're allowed to back off on the coedit threshold and don't have enough
         # recs, ease off on the threshold and try again.
-        needed = nrecs - len(recs) > 0
-        while backoff and self.thresh >= self.min_thresh and needed:
-            self.thresh -= 1
-            logging.info('Co-edit threshold is now {0}'.format(self.thresh))
+#        needed = nrecs - len(recs) > 0
+#        while backoff and self.thresh >= self.min_thresh and needed:
+#            self.thresh -= 1
+#            logging.info('Co-edit threshold is now {0}'.format(self.thresh))
             recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
-            needed = nrecs - len(recs)
+#            needed = nrecs - len(recs) > 0
 
         db.disconnect(self.dbconn, self.dbcursor)
         # Return truncated to nrecs, switched from list of objects to list of dicts
         return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
+
+#-------------------------------------------------------------------------------------------------------------
 
     def get_recs_at_coedit_threshold(self, username, contribs, test):
         '''
@@ -374,6 +371,8 @@ class CollabRecommender:
                       key=operator.attrgetter('shared'),
                       reverse=True)[:k]
         return recs
+
+#-----------------------------------------------------------------------------------------------------------------------
 
     def user_association(self, user, basket):
         '''
