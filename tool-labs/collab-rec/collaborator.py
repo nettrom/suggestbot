@@ -31,6 +31,10 @@ import db
 ## Catching MySQL errors
 import MySQLdb
 
+from collections import deque
+
+## FIXME: potential speedup: caching edit counts, as we'll see users multiple times
+
 class RecUser:
     def __init__(self, username, assoc, shared, cosine):
         '''
@@ -142,6 +146,9 @@ class CollabRecommender:
         self.thresh  = threshold
         self.backoff = backoff
         self.test = test
+        
+        ## Mapping usernames to edit counts to identify experts/non-experts
+        self.editcount_map = {}
 
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.

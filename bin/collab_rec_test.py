@@ -83,31 +83,32 @@ def main():
         total_recs = 0
         total_overlap = 0
 
-        members = ['Slatersteven', 'WerWil', 'Fnlayson', 'Drrcs15', 'Turbothy',
-                   '21stCenturyGreenstuff', 'RGFI', 'Loesorion', 'Grahamdubya', 'Sioraf',
-                   'Skittles the hog', 'Smoth 007', 'Superfly94', 'Ewulp', 'Dank', 'Magus732',
-                   'Redmarkviolinist', 'The27thMaine', 'Kcdlp', 'Foxsch', 'Tdrss', 'URTh',
-                   'Waase', 'L clausewitz', 'Judgedtwice', 'Choy4311', 'Codrinb', 'Smmurphy',
-                   'Kliu1', 'Gowallabies', 'Secutor7', 'Moneywagon', 'Nostalgia of Iran',
-                   'Linmhall', 'Karanacs', 'Dana boomer', 'Robotam', 'Fdsdh1', 'DanieB52',
-                   'Rosiestep', 'Scholarus', 'Laurinavicius', 'Dapi89', 'UrbanTerrorist',
-                   'AGK', 'Samuel Peoples', 'Sapphire', 'Catlemur', 'Martocticvs', 'Gparkes',
-                   'Pratyya Ghosh', 'Eurocopter', 'Pahari Sahib', 'Seitzd', 'The Bushranger',
-                   'Natobxl', 'MasterOfHisOwnDomain', 'Takashi kurita', 'TeunSpaans',
-                   'Kierzek', 'WDGraham', 'Miborovsky', 'The lost library',
-                   'Antidiskriminator', 'The ed17', 'Cliftonian', 'AshLin',
-                   'GeneralizationsAreBad', 'MechaChrist', 'Joep01', 'Chris.w.braun',
-                   'TBrandley', 'Marky48', 'Cplakidas', 'John', 'Nyth83', 'Elonka',
-                   'Alexandru.demian', 'Martinp23', 'GermanJoe', 'P.Marlow', 'ryan.opel',
-                   'Asarelah', 'Ian Rose', 'Pectory', 'KizzyB', 'MrDolomite', 'Leifern',
-                   'Timeweaver', 'Ashashyou', 'Sumsum2010', 'Looper5920', 'Geira', 'Ackpriss',
-                   'Binksternet', 'Lothar von Richthofen', 'Molestash', 'Srnec',
-                   'Sasuke Sarutobi', '.marc.']
+        # members = ['Slatersteven', 'WerWil', 'Fnlayson', 'Drrcs15', 'Turbothy',
+        #            '21stCenturyGreenstuff', 'RGFI', 'Loesorion', 'Grahamdubya', 'Sioraf',
+        #            'Skittles the hog', 'Smoth 007', 'Superfly94', 'Ewulp', 'Dank', 'Magus732',
+        #            'Redmarkviolinist', 'The27thMaine', 'Kcdlp', 'Foxsch', 'Tdrss', 'URTh',
+        #            'Waase', 'L clausewitz', 'Judgedtwice', 'Choy4311', 'Codrinb', 'Smmurphy',
+        #            'Kliu1', 'Gowallabies', 'Secutor7', 'Moneywagon', 'Nostalgia of Iran',
+        #            'Linmhall', 'Karanacs', 'Dana boomer', 'Robotam', 'Fdsdh1', 'DanieB52',
+        #            'Rosiestep', 'Scholarus', 'Laurinavicius', 'Dapi89', 'UrbanTerrorist',
+        #            'AGK', 'Samuel Peoples', 'Sapphire', 'Catlemur', 'Martocticvs', 'Gparkes',
+        #            'Pratyya Ghosh', 'Eurocopter', 'Pahari Sahib', 'Seitzd', 'The Bushranger',
+        #            'Natobxl', 'MasterOfHisOwnDomain', 'Takashi kurita', 'TeunSpaans',
+        #            'Kierzek', 'WDGraham', 'Miborovsky', 'The lost library',
+        #            'Antidiskriminator', 'The ed17', 'Cliftonian', 'AshLin',
+        #            'GeneralizationsAreBad', 'MechaChrist', 'Joep01', 'Chris.w.braun',
+        #            'TBrandley', 'Marky48', 'Cplakidas', 'John', 'Nyth83', 'Elonka',
+        #            'Alexandru.demian', 'Martinp23', 'GermanJoe', 'P.Marlow', 'ryan.opel',
+        #            'Asarelah', 'Ian Rose', 'Pectory', 'KizzyB', 'MrDolomite', 'Leifern',
+        #            'Timeweaver', 'Ashashyou', 'Sumsum2010', 'Looper5920', 'Geira', 'Ackpriss',
+        #            'Binksternet', 'Lothar von Richthofen', 'Molestash', 'Srnec',
+        #            'Sasuke Sarutobi', '.marc.']
 
         # members = ['Kieran4', 'Brendandh', 'Gog the Mild', 'Seitzd', 'Robotam',
         #            'Keith-264', 'Nyth83', 'Mmuroya', 'Navy2004', 'Secutor7',
         #            'Ranger Steve', 'MisterBee1966']
 
+        members = ['Kieran4']
 
         for member in members:
                 user = pywikibot.User(site, member)
