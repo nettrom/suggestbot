@@ -198,7 +198,7 @@ class CollabRecommender:
 #        while backoff and self.thresh >= self.min_thresh and needed:
 #            self.thresh -= 1
 #            logging.info('Co-edit threshold is now {0}'.format(self.thresh))
-            recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
+        recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
 #            needed = nrecs - len(recs) > 0
 
         db.disconnect(self.dbconn, self.dbcursor)
