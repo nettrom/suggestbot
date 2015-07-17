@@ -231,10 +231,23 @@ class CollabRecommender:
         WHERE p.page_namespace=0
         AND p.page_title=%(title)s
         AND r.rev_timestamp >= %(timestamp)s
-        ORDER BY r.rev_timestamp ASC""".format(revision_table=self.revtable)
+        AND r.rev_minor_edit=0
+        ORDER BY r.rev_timestamp ASC"""
+
+        get_minor_users_by_article_query = """SELECT r.rev_user, r.rev_user_text, r.rev_timestamp, r.rev_sha1, IFNULL(ug.ug_group, 'no') AS is_bot FROM page p
+        JOIN revision_userindex r
+        ON p.page_id=r.rev_page
+        LEFT JOIN (SELECT * FROM user_groups WHERE ug_group='bot') ug
+        ON r.rev_user=ug.ug_user
+        WHERE p.page_namespace=0
+        AND p.page_title=%(title)s
+        AND r.rev_timestamp >= %(timestamp)s
+        AND r.rev_minor_edit=1
+        ORDER BY r.rev_timestamp ASC"""
+
 
         # This query fetches the hashes of the fifteen edits prior to the examined tate range to identify reverts..
-        get_edit_hashes = """SELECT r.rev_sha1
+        get_edit_hashes_query = """SELECT r.rev_sha1
         FROM revision r
         JOIN page p
         ON r.rev_page=p.page_id
@@ -242,7 +255,7 @@ class CollabRecommender:
         AND p.page_title=%(title)s
         AND r.rev_timestamp < %(timestamp)s
         ORDER BY r.rev_timestamp DESC
-        LIMIT %(k)s""".format(revision_table=self.revtable)
+        LIMIT %(k)s"""
         
         # How many different users have coedited a given item with something
         # in the basket
@@ -260,7 +273,25 @@ class CollabRecommender:
         
         for item in contribs:
             # For each article the user has edited, find other editors.
-            logging.info('checking article: {0}'.format(item))
+            #logging.info('checking article: {0}'.format(item))
+
+            # Get 15 edits before cutoff to identify reverts
+
+            hash_record = []
+            user_record = []
+
+            try:
+                self.dbcursor.execute(get_edit_hashes_query,
+                                      {'title': item,
+                                       'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S'),
+                                       'k': 15})
+            except MySQLdb.Error as e:
+                logging.error("unable to execute query to get users by article")
+                logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
+                return(recs)
+
+            for row in self.dbcursor.fetchall():
+                hash_record.append(hashed)
 
             # Translate " " to "_"
             item = item.replace(" ", "_")
@@ -279,16 +310,34 @@ class CollabRecommender:
 
             for row in self.dbcursor.fetchall():
                 user = row['rev_user_text']
+                hashed = row['rev_sha1']
                 if user == username: # user can't be their own neighbour
                     continue
-                if user in coeditors:
+                if row['rev_user'] == 0:
+                    continue
+                if row['is_bot'] == 'bot':
+                    continue
+                if user == "bot(\b|$)":
                     continue
 
                 other_editors[user] = 1
 
+                if hashed in hash_record:
+                    index = hash_record.index(hashed) - 15
+                    if index < 0:
+                        index = 0
+                    for i in range (index, len(user_record)):
+                        if user_record[index] in other_editors:
+                            del other_editors[user_record[index]]
+                        user_record.remove(user_record[index])
+                        hash_record.remove(hash_record[index])
+                else:
+                    user_record.append(user)
+                    hash_record.append(hashed)
+
             logging.info('found {0} stakeholders'.format(len(other_editors)))
               
-            '''# Then we check minor edits and reverts, and keep those users who are
+            # Then we check minor edits and reverts, and keep those users who are
             # not in the top 10% of users (see `self.exp_thresh`).
 
             # Users we've seen (so we don't re-run SQL queries all the time)...
@@ -307,16 +356,14 @@ class CollabRecommender:
                 if user == username:
                     logging.info('user cannot be their own neighbour, skipping')
                     continue
-                if user in coeditors:
-                    logging.info('already seen this user')
                 if user in other_editors:
                     logging.info('user already major stakeholder')
                     continue
 
                 seen_minors[user] = 1
 
-            logging.info('found {0} minor editors, checking edit counts'.format(
-                len(seen_minors)))
+            #logging.info('found {0} minor editors, checking edit counts'.format(
+               # len(seen_minors)))
                 
             for user in seen_minors.keys():
                 try:
@@ -332,7 +379,7 @@ class CollabRecommender:
                     if row['numedits'] < self.exp_thresh:
                         other_editors[user] = 1
 
-            logging.info('found {0} other editors in total'.format(len(other_editors)))'''
+            #logging.info('found {0} other editors in total'.format(len(other_editors)))
 
             # Now we have all relevant stakeholders in the article, and can
             # compute the appropriate association.
@@ -413,7 +460,8 @@ class CollabRecommender:
                                    'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
         for row in self.dbcursor.fetchall():
             user_edits.add(row['page_title'])
-
+        print('Total edits by {0}: {1}'.format(user, len(user_edits)))
+        print('Size of target basket: {0}'.format(len(basket)))
         # Calculate association using the Jaccard Coefficient and Cosine Similarity test
         shared = len(user_edits & basket)
         union = len(user_edits | basket)
