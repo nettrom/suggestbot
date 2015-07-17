@@ -221,28 +221,28 @@ class CollabRecommender:
         :type test: str
         '''
         
-        # First query gets users who made non-minor, non-reverting edits
-        # to this article.  These are _always_ potential neighbours.
-        get_users_by_article_query = """SELECT DISTINCT rev_user_text
-        FROM {revision_table} r
-        JOIN page p
-        ON r.rev_page=p.page_id
-        WHERE p.page_title = %(title)s
-        AND p.page_namespace=0
-        AND r.rev_minor_edit=0
-        AND r.rev_timestamp >= %(timestamp)s""".format(revision_table=self.revtable)
+        # This query gets users who made edits to the article. Reverts, IPs, bot names, and minor edits for experienced users
+        # will be filtered out of the resulting set.
+        get_users_by_article_query = """SELECT r.rev_user, r.rev_user_text, r.rev_timestamp, r.rev_sha1, IFNULL(ug.ug_group, 'no') AS is_bot FROM page p
+        JOIN revision_userindex r
+        ON p.page_id=r.rev_page
+        LEFT JOIN (SELECT * FROM user_groups WHERE ug_group='bot') ug
+        ON r.rev_user=ug.ug_user
+        WHERE p.page_namespace=0
+        AND p.page_title=%(title)s
+        AND r.rev_timestamp >= %(timestamp)s
+        ORDER BY r.rev_timestamp ASC""".format(revision_table=self.revtable)
 
-        # Second query gets the other users (either minor or reverting),
-        # these are only interesting if they're below the threshold for total
-        # number of edits, as they otherwise know what they were doing.
-        get_minor_users_by_article_query = """SELECT DISTINCT rev_user_text
-        FROM {revision_table} r
+        # This query fetches the hashes of the fifteen edits prior to the examined tate range to identify reverts..
+        get_edit_hashes = """SELECT r.rev_sha1
+        FROM revision r
         JOIN page p
         ON r.rev_page=p.page_id
-        WHERE p.page_title = %(title)s
-        AND p.page_namespace=0
-        AND r.rev_minor_edit=1
-        AND r.rev_timestamp >= %(timestamp)s""".format(revision_table=self.revtable)
+        WHERE p.page_namespace=0
+        AND p.page_title=%(title)s
+        AND r.rev_timestamp < %(timestamp)s
+        ORDER BY r.rev_timestamp DESC
+        LIMIT %(k)s""".format(revision_table=self.revtable)
         
         # How many different users have coedited a given item with something
         # in the basket
@@ -286,8 +286,8 @@ class CollabRecommender:
 
                 other_editors[user] = 1
 
-            logging.info('found {0} major stakeholders'.format(len(other_editors)))
-                
+            logging.info('found {0} stakeholders'.format(len(other_editors)))
+/*                
             # Then we check minor edits and reverts, and keep those users who are
             # not in the top 10% of users (see `self.exp_thresh`).
 
@@ -333,7 +333,7 @@ class CollabRecommender:
                         other_editors[user] = 1
 
             logging.info('found {0} other editors in total'.format(len(other_editors)))
-
+*/
             # Now we have all relevant stakeholders in the article, and can
             # compute the appropriate association.
             for user in other_editors:
