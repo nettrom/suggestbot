@@ -287,8 +287,8 @@ class CollabRecommender:
                 other_editors[user] = 1
 
             logging.info('found {0} stakeholders'.format(len(other_editors)))
-'''               
-            # Then we check minor edits and reverts, and keep those users who are
+              
+            '''# Then we check minor edits and reverts, and keep those users who are
             # not in the top 10% of users (see `self.exp_thresh`).
 
             # Users we've seen (so we don't re-run SQL queries all the time)...
@@ -332,8 +332,8 @@ class CollabRecommender:
                     if row['numedits'] < self.exp_thresh:
                         other_editors[user] = 1
 
-            logging.info('found {0} other editors in total'.format(len(other_editors)))
-'''
+            logging.info('found {0} other editors in total'.format(len(other_editors)))'''
+
             # Now we have all relevant stakeholders in the article, and can
             # compute the appropriate association.
             for user in other_editors:
