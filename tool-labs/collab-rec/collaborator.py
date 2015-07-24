@@ -204,7 +204,7 @@ class CollabRecommender:
 #        while backoff and self.thresh >= self.min_thresh and needed:
 #            self.thresh -= 1
 #            logging.info('Co-edit threshold is now {0}'.format(self.thresh))
-        recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
+        #recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
 #            needed = nrecs - len(recs) > 0
 
         db.disconnect(self.dbconn, self.dbcursor)
@@ -260,6 +260,8 @@ class CollabRecommender:
         num_edits = 0
         page_title = ""
         
+        user_acc_ct = 0
+        
         for item in contribs:
             # For each article the user has edited, find other editors.
             #logging.info('checking article: {0}'.format(item))
@@ -268,8 +270,7 @@ class CollabRecommender:
             item = item.replace(" ", "_")
 
             # Get 15 edits before cutoff to identify reverts
-            earlier_revisions = []
-            other_editors = {}
+            revisions = []
             try:
                 self.dbcursor.execute(get_revision_history_query,
                                       {'title': item,
@@ -282,14 +283,17 @@ class CollabRecommender:
 
             for row in self.dbcursor.fetchall():
                 try:
-                    earlier_revisions.append((row['rev_sha1'].decode(), {'rev_id' : row['rev_id']}))
+                    revisions.append((row['rev_sha1'].decode(), {'rev_id' : row['rev_id']}))
                 except AttributeError:
                     continue
-            revert_results = list(reverts.detect(earlier_revisions))
             
             
             # Get all contributors to item; Remove bots and reverts
-            editors = defaultdict(lambda: 0)
+            
+            # editors stores a list containing a contribution count and a boolean
+            # indicating whether the user should be included in final results
+            editors = defaultdict(lambda: [0, False])
+            edits = {}
             try:
                 self.dbcursor.execute(get_users_by_article_query,
                                       {'title': item,
@@ -300,21 +304,66 @@ class CollabRecommender:
                 return(recs)
 
             for row in self.dbcursor.fetchall():
-                if self.valid_editor(row, username):
-                    other_editors[row['rev_user_text'].decode()] = 1
+                # Increment defaultdict contribution count if the user is not a bot and has not already been added to the coeditor_objs dictionary
+                if self.valid_editor(row, username) and username not in coeditor_objs:
+                    user = row['rev_user_text'].decode()                    
+                    editors[user][0] += 1
+                    # This flag in the defaultdict is set to True if the user makes a non-minor edit now, or later if their edit count is below the threshold
+                    if not row['rev_minor_edit']:
+                        editors[user][1] = True
+                    edits[str(row['rev_id'])] = (user, row['rev_timestamp'])
                 
+                # This is checked even if the user failed the validity checks above, ensuring that reverts by bots are caught as well
+                try:
+                    revisions.append((row['rev_sha1'].decode(), {'rev_id' : row['rev_id']}))
+                    revert_list = list(reverts.detect(revisions))
+                    if len(revert_list) > 0:
+                        for intermediate in revert_list[0][1]:
+                            try:
+                                if row['rev_timestamp'] - edits[str(intermediate['rev_id'])[1]] < 500:
+                                    editors[edits[str(intermediate['rev_id'])][0]][0] -= 1
+                            except KeyError:
+                                pass
+                except AttributeError:
+                    print("Attribute exception")                     
 
-            # Now we have all relevant stakeholders in the article, and can
-            # compute the appropriate association.
-            for user in other_editors:
-                user_obj = RecUser(user, 0, 0, 0)
+            # Now we have all relevant stakeholders in the article, and can compute the appropriate association.
+            for user_key in editors.keys():
+            
+                # Check total number of edits if the user's edits on this article have all been minor
+                if not editors[user_key][1]:
+                   #try:
+                    self.dbcursor.execute(self.get_edit_count_query,
+                                          {'username': user_key,
+                                           'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})           
+                    '''except MySQLdb.Error as e:
+                        pass
+                        logging.error("unable to execute query to get editcount for user")
+                        logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
+                        continue '''
+                    for row in self.dbcursor.fetchall():
+                        # Set flag to True if user is below edit count threshold, indicating that user should be included in coeditor_objs
+                        if row['numedits'] < self.exp_thresh:
+                            editors[user_key][1] = True
+          
+			
+                if editors[user_key][0] == 0:
+                    print("{0} has a contribution score of 0".format(user_key))
+                    continue
+                    
+                if not editors[user_key][1]:
+                    print("{0} is above the edit threshold and has made only minor edits".format(user_key))
+                    continue
+			
+                user_obj = RecUser(user_key, 0, 0, 0)
                 
                 # Add user to coeditor_objs so we'll skip this user later
-                coeditor_objs[user] = user_obj
+                coeditor_objs[user_key] = user_obj
 
-                (assoc, shared, cosine) = self.user_association(user, contribs)
+                (assoc, shared, cosine) = self.user_association(user_key, contribs)
+                user_acc_ct += 1
                 logging.info('user={0}, assoc={1}, shared={2}, cosine={3}'.format(
-                    user, assoc, shared, cosine))
+                    user_key, assoc, shared, cosine))
                 if assoc < self.assoc_thresh:
                     continue
 
@@ -322,7 +371,8 @@ class CollabRecommender:
                 user_obj.shared = shared
                 user_obj.cosine = cosine
 
-        logging.info("Found {0} pre-neighbours".format(len(coeditor_objs)))
+        #logging.info("Found {0} pre-neighbours".format(len(coeditor_objs)))
+        print("Number of applicable users found: {0}; Number of user acc calls: {1}".format(len(coeditor_objs), user_acc_ct))
 
         # Find nhood of top k users
         k = 250  # Larger nhood for more recs, hopefully
@@ -403,7 +453,7 @@ class CollabRecommender:
                                    'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
         for row in self.dbcursor.fetchall():
             user_edits.add(row['page_title'])
-        print('Total edits by {0}: {1}'.format(user, len(user_edits)))
+        #print('Total edits by {0}: {1}'.format(user, len(user_edits)))
         #print('Size of target basket: {0}'.format(len(basket)))
         # Calculate association using the Jaccard Coefficient and Cosine Similarity test
         if len(user_edits) > 0:
