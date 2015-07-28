@@ -25,7 +25,7 @@ import re
 import random
 import logging
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 from collaborator import CollabRecommender
 import pywikibot
@@ -113,9 +113,12 @@ def main():
     #            'Keith-264', 'Nyth83', 'Mmuroya', 'Navy2004', 'Secutor7',
     #            'Ranger Steve', 'MisterBee1966']
 
-    members = ['Kieran4']
+    members = ['Callinus']
     
     for member in members:
+
+        print(member)
+
         user = pywikibot.User(site, member)
         contribs = []
         for (page, revid, time, comment) in user.contributions(128,
@@ -123,10 +126,9 @@ def main():
             contribs.append(page.title())	
 
         # Calculate the cutoff date
-        cutoff = datetime.now(timezone.utc) - timedelta(days=args.cutoff*30)
+        cutoff = datetime.now() - timedelta(days=args.cutoff*30)
         matches = recommender.recommend(contribs, member, 'en', cutoff,
                                         nrecs=args.nrecs, backoff=1, test=args.test)
-        
         match_set = set([rec['item'] for rec in matches])
         overlap = match_set & all_members
         
@@ -136,6 +138,9 @@ def main():
         print('Got {n} recommendations for User:{user}'.format(n=len(match_set),
                                                                user=member))
         print('Overlap with all members: {0}'.format(len(overlap)))
+       
+        for i in range(0, len(match_set)):
+            print(match_set.pop())
 
     print('''Total statistics:
     Number of recommendations: {n}
