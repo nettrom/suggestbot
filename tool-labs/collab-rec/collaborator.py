@@ -24,6 +24,9 @@ Boston, MA  02110-1301, USA.
 import operator
 import logging
 import math
+import re
+
+from datetime import datetime
 
 ## Import our Tool Labs DB connector
 import db
@@ -153,7 +156,7 @@ class CollabRecommender:
 
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.
-        self.get_articles_by_user_query = """SELECT page_title
+        self.get_articles_by_user_query = """SELECT DISTINCT page_title
              FROM {revision_table} r
              JOIN page p
              ON r.rev_page=p.page_id
@@ -162,7 +165,15 @@ class CollabRecommender:
 
         # Query to get edited articles for a user who is above the threshold,
         # we then disregard minor edits and reverts.
-        self.get_articles_by_expert_user_query = """SELECT page_title
+        # self.get_articles_by_expert_user_query = """SELECT p.page_title,
+        #      p.page_id, r.rev_id, r.rev_sha1, r.rev_timestamp
+        #      FROM {revision_table} r
+        #      JOIN page p
+        #      ON r.rev_page=p.page_id
+        #      WHERE rev_user_text = %(username)s
+        #      AND rev_timestamp >= %(timestamp)s
+        #      AND rev_minor_edit=0""".format(revision_table=self.revtable)
+        self.get_articles_by_expert_user_query = """SELECT DISTINCT p.page_title
              FROM {revision_table} r
              JOIN page p
              ON r.rev_page=p.page_id
@@ -187,6 +198,9 @@ class CollabRecommender:
         # Recommendations we'll be returning
         recs = []
 
+        # Mapping usernames to number of edits to not repeat those SQL queries
+        self.nedit_map = {}
+
         (self.dbconn, self.dbcursor) = db.connect(dbhost='c3.labsdb')
         if not self.dbconn:
             logging.error("Failed to connect to database")
@@ -198,20 +212,9 @@ class CollabRecommender:
         # Get some recs.
         recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
 
-        # If we're allowed to back off on the coedit threshold and don't have enough
-        # recs, ease off on the threshold and try again.
-#        needed = nrecs - len(recs) > 0
-#        while backoff and self.thresh >= self.min_thresh and needed:
-#            self.thresh -= 1
-#            logging.info('Co-edit threshold is now {0}'.format(self.thresh))
-        #recs = self.get_recs_at_coedit_threshold(username, contribs, self.test)
-#            needed = nrecs - len(recs) > 0
-
         db.disconnect(self.dbconn, self.dbcursor)
         # Return truncated to nrecs, switched from list of objects to list of dicts
         return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
-
-#-------------------------------------------------------------------------------------------------------------
 
     def get_recs_at_coedit_threshold(self, username, contribs, test):
         '''
@@ -229,7 +232,10 @@ class CollabRecommender:
         
         # This query gets users who made edits to the article. Reverts, IPs, bot names, and minor edits for experienced users
         # will be filtered out of the resulting set.
-        get_users_by_article_query = """SELECT r.rev_user, r.rev_user_text, r.rev_timestamp, r.rev_minor_edit, r.rev_id, r.rev_sha1, IFNULL(ug.ug_group, 'no') AS is_bot FROM page p
+        get_users_by_article_query = """SELECT r.rev_user, r.rev_user_text,
+            r.rev_timestamp, r.rev_minor_edit, r.rev_id, r.rev_sha1,
+            IFNULL(ug.ug_group, 'no') AS is_bot
+        FROM page p
         JOIN revision_userindex r
         ON p.page_id=r.rev_page
         LEFT JOIN (SELECT * FROM user_groups WHERE ug_group='bot') ug
@@ -239,8 +245,10 @@ class CollabRecommender:
         AND r.rev_timestamp >= %(timestamp)s
         ORDER BY r.rev_timestamp ASC"""
 
-        # This query fetches the hashes and IDs of the fifteen edits prior to the examined tate range to identify reverts..
-        get_revision_history_query = """SELECT r.rev_sha1, r.rev_id
+        # This query fetches the hashes and IDs of the fifteen edits prior
+        # to the examined tate range to identify reverts..
+        get_revision_history_query = """SELECT r.rev_sha1,
+            r.rev_id, r.rev_timestamp, r.rev_user_text
         FROM revision r
         JOIN page p
         ON r.rev_page=p.page_id
@@ -269,8 +277,9 @@ class CollabRecommender:
             # Translate " " to "_"
             item = item.replace(" ", "_")
 
-            # Get 15 edits before cutoff to identify reverts
-            revisions = []
+            # Load up the revert detector with the 15 edits prior to
+            # the first one we'll process.
+            detector = reverts.Detector()
             try:
                 self.dbcursor.execute(get_revision_history_query,
                                       {'title': item,
@@ -283,16 +292,23 @@ class CollabRecommender:
 
             for row in self.dbcursor.fetchall():
                 try:
-                    revisions.append((row['rev_sha1'].decode(), {'rev_id' : row['rev_id']}))
+                    sha1 = row['rev_sha1'].decode()
+                    rev_user = row['rev_user_text'].decode()
+                    rev_time = datetime.strptime(row['rev_timestamp'].decode(),
+                                                 '%Y%m%d%H%M%S')
+                    detector.process(sha1,
+                                     {'rev_id': row['rev_id'],
+                                      'rev_user': rev_user,
+                                      'rev_timestamp': rev_time})
                 except AttributeError:
                     continue
             
-            
             # Get all contributors to item; Remove bots and reverts
-            
-            # editors stores a list containing a contribution count and a boolean
-            # indicating whether the user should be included in final results
-            editors = defaultdict(lambda: [0, False])
+
+            # editors maps usernames to a list containing a contribution count
+            # and a boolean indicating whether the user should be included
+            # in final results
+            editors = defaultdict(lambda: {'numedits': 0, 'is_major': False})
             edits = {}
             try:
                 self.dbcursor.execute(get_users_by_article_query,
@@ -304,66 +320,83 @@ class CollabRecommender:
                 return(recs)
 
             for row in self.dbcursor.fetchall():
-                # Increment defaultdict contribution count if the user is not a bot and has not already been added to the coeditor_objs dictionary
-                if self.valid_editor(row, username) and username not in coeditor_objs:
-                    user = row['rev_user_text'].decode()                    
-                    editors[user][0] += 1
-                    # This flag in the defaultdict is set to True if the user makes a non-minor edit now, or later if their edit count is below the threshold
-                    if not row['rev_minor_edit']:
-                        editors[user][1] = True
-                    edits[str(row['rev_id'])] = (user, row['rev_timestamp'])
-                
-                # This is checked even if the user failed the validity checks above, ensuring that reverts by bots are caught as well
                 try:
-                    revisions.append((row['rev_sha1'].decode(), {'rev_id' : row['rev_id']}))
-                    revert_list = list(reverts.detect(revisions))
-                    if len(revert_list) > 0:
-                        for intermediate in revert_list[0][1]:
-                            try:
-                                if row['rev_timestamp'] - edits[str(intermediate['rev_id'])[1]] < 500:
-                                    editors[edits[str(intermediate['rev_id'])][0]][0] -= 1
-                            except KeyError:
-                                pass
+                    rev_username = row['rev_user_text'].decode()
+                    rev_time = datetime.strptime(row['rev_timestamp'].decode(),
+                                                 '%Y%m%d%H%M%S')
+                    rev_sha1 = row['rev_sha1'].decode()
+                    rev_is_bot = row['is_bot'].decode()
                 except AttributeError:
-                    print("Attribute exception")                     
+                    # Not a valid revision (e.g. deleted), ignore it...
+                    continue
 
-            # Now we have all relevant stakeholders in the article, and can compute the appropriate association.
-            for user_key in editors.keys():
-            
-                # Check total number of edits if the user's edits on this article have all been minor
-                if not editors[user_key][1]:
-                   #try:
-                    self.dbcursor.execute(self.get_edit_count_query,
-                                          {'username': user_key,
-                                           'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})           
-                    '''except MySQLdb.Error as e:
-                        pass
-                        logging.error("unable to execute query to get editcount for user")
-                        logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
-                        continue '''
-                    for row in self.dbcursor.fetchall():
-                        # Set flag to True if user is below edit count threshold, indicating that user should be included in coeditor_objs
-                        if row['numedits'] < self.exp_thresh:
-                            editors[user_key][1] = True
-          
-			
-                if editors[user_key][0] == 0:
-                    print("{0} has a contribution score of 0".format(user_key))
+                # Increment defaultdict contribution count if the editor
+                # is registered, not a bot, and not the user we're suggesting to
+                if self.valid_editor(rev_username, row['rev_user'],
+                                     rev_is_bot, username):
+                    editors[rev_username]['numedits'] += 1
+
+                    # This flag in the defaultdict is set to True if the user makes
+                    # a non-minor edit now, or later if their edit count is below
+                    # the threshold
+                    if not row['rev_minor_edit']:
+                        editors[rev_username]['is_major'] = True
+
+                # This is checked even if the user failed the validity checks above,
+                # ensuring that reverts by bots are caught as well
+                revert = detector.process(rev_sha1,
+                                          {'rev_id': row['rev_id'],
+                                           'rev_user': rev_username,
+                                           'rev_timestamp': rev_time})
+                if not revert:
                     continue
-                    
-                if not editors[user_key][1]:
-                    print("{0} is above the edit threshold and has made only minor edits".format(user_key))
+
+                if not rev_is_bot:
+                    # Decrement this editor too, we don't count reverts
+                    editors[rev_username]['numedits'] -= 1
+
+                # If the revert was done by a bot, or it was done in less
+                # than 5 minutes, decrement all intermediate editors.
+                timediff = revert.reverting['rev_timestamp'] \
+                           - revert.reverteds[0]['rev_timestamp']
+                if rev_is_bot == 'bot' or timediff.seconds <= 300:
+                    for intermediate in revert.reverteds:
+                        editors[intermediate['rev_user']]['numedits'] -= 1
+
+            print('found {0} candidate users'.format(len(editors)))
+
+            for candidate_user, candata in editors.items():
+                # Already processed this user?
+                if candidate_user in coeditor_objs:
                     continue
-			
-                user_obj = RecUser(user_key, 0, 0, 0)
+
+                # No edits means they were reverted
+                if candata['numedits'] <= 0:
+                    continue
+
+                # Check total number of edits if the user's edits on this
+                # article have all been minor
+                if not candata['is_major']:
+                    if self.get_editcount(candidate_user) < self.exp_thresh:
+                        # Set flag to True if user is below edit count threshold,
+                       candata['is_major'] = True
+
+                if not candata['is_major']:
+                    logging.info("{0} made only minor edits, but is above the edit threshold".format(candidate_user))
+                    continue
+
+                print('Calculating association for User:{0}'.format(candidate_user))
+
+                user_obj = RecUser(candidate_user, 0, 0, 0)
                 
                 # Add user to coeditor_objs so we'll skip this user later
-                coeditor_objs[user_key] = user_obj
+                coeditor_objs[candidate_user] = user_obj
 
-                (assoc, shared, cosine) = self.user_association(user_key, contribs)
+                (assoc, shared, cosine) = self.user_association(candidate_user,
+                                                                contribs)
                 user_acc_ct += 1
                 logging.info('user={0}, assoc={1}, shared={2}, cosine={3}'.format(
-                    user_key, assoc, shared, cosine))
+                    candidate_user, assoc, shared, cosine))
                 if assoc < self.assoc_thresh:
                     continue
 
@@ -379,41 +412,116 @@ class CollabRecommender:
 
         # Return results sorted according to "test" parameter
         if test == 'jaccard':
-                recs = sorted(coeditor_objs.values(),
-                      key=operator.attrgetter('assoc'),
-                      reverse=True)[:k]
+            recs = sorted(coeditor_objs.values(),
+                          key=operator.attrgetter('assoc'),
+                          reverse=True)[:k]
         elif test == 'cosine':
-                recs = sorted(coeditor_objs.values(),
-                      key=operator.attrgetter('cosine'),
-                      reverse=True)[:k]
+            recs = sorted(coeditor_objs.values(),
+                          key=operator.attrgetter('cosine'),
+                          reverse=True)[:k]
         elif test == 'coedit':
-                recs = sorted(coeditor_objs.values(),
-                      key=operator.attrgetter('shared'),
-                      reverse=True)[:k]
+            recs = sorted(coeditor_objs.values(),
+                          key=operator.attrgetter('shared'),
+                          reverse=True)[:k]
         return recs
 
-#-----------------------------------------------------------------------------------------------------------------------
+    def valid_editor(self, cand_name, cand_id, is_bot, username):
+        '''
+        Test if a candidate user is a valid editor to process.
 
-    def valid_editor(self, row, username):
+        :param cand_name: Username of the candidate editor
+        :type cand_name: str
+
+        :param cand_id: User ID of the candidate editor
+        :type cand_id: int
+
+        :param cand_bot: User group set to 'bot' if the user is in the bot group
+        :type cand_bot: str
+
+        :param username: Username of the editor we are suggesting to
+        :type username: str
+        '''
         try:
-            candidate = row['rev_user_text'].decode()
-            if candidate == username:
+            if cand_name == username:
                 #logging.info('user cannot be their own neighbour, skipping')
-                return False
-            if row['rev_user'] == 0:
-                #print("row 0 found")
-                return False
-            if row['is_bot'].decode() == 'bot':
-                #print("{0} is a bot by flag".format(user))
-                return False
-            if candidate == "bot(\b|$)":
-                #print("{0} is a bot by name".format(user))
-                return False
+                return(False)
+            if not cand_id:
+                # Unregistered editor, or a deleted revision w/no user ID
+                return(False)
+            if is_bot == 'bot':
+                #print("{0} is a bot by flag".format(cand_name))
+                return(False)
+            if re.search("bot(\b|$)", cand_name, re.I):
+                print("{0} is a bot by name".format(cand_name))
+                return(False)
         except AttributeError:
-            return False
-        return True
+            return(False)
+            
+        return(True)
 
-#-----------------------------------------------------------------------------------------------------------------------
+    def get_editcount(self, username, **kwargs):
+        '''
+        Get the edit count of the given user
+        
+        :param username: Name of the user
+        :type username: str
+        
+        :param default: Value to return if user has no edits
+        :type default: mixed
+        '''
+        nedits = kwargs.get('default', self.exp_thresh)
+
+        try:
+            return(self.nedit_map[username])
+        except KeyError:
+            try:
+                self.dbcursor.execute(self.get_edit_count_query,
+                                      {'username': username,
+                                       'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
+                for row in self.dbcursor.fetchall():
+                    nedits = row['numedits']
+                    self.nedit_map[username] = nedits
+            except MySQLdb.Error as e:
+                logging.error("unable to execute query to get editcount for user")
+                logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
+        
+        return nedits
+
+    def is_revert(self, page_id, sha1, timestamp, radius=15):
+        '''
+        Check if within `radius` number of revisions to the given page id
+        prior to the given timestamp, any revision has the same checksum.
+
+        :param page_id: page we're checking
+        :type page_id: long
+
+        :param sha1: SHA1 checksum of the revision we're checking
+        :type sha1: str
+
+        :param timestamp: timestamp of the revision we're checking
+        :type timestamp: str
+        '''
+        get_checksums_query = """SELECT rev_sha1
+        FROM revision
+        WHERE rev_page=%(pageid)s
+        AND rev_timestamp < %(timestamp)s
+        ORDER BY rev_timestamp DESC
+        LIMIT %(k)s"""
+
+        checksums = set()
+        try:
+            self.dbcursor.execute(get_checksums_query,
+                                  {'pageid': page_id,
+                                   'timestamp': timestamp,
+                                   'k': radius})
+            for row in self.dbcursor.fetchall():
+                checksums.add(row['rev_sha1'].decode())
+        except MySQLdb.Error as e:
+            logging.warning('Unable to execute query to get revision checksums')
+            return(False)
+
+        return(sha1 in checksums)
+
     def user_association(self, user, basket):
         '''
         Calculate the association between a given user and a basket
@@ -431,28 +539,21 @@ class CollabRecommender:
         shared = 0
         user_edits = set()
 
-        # Find common articles.  We first find the user's editcount, to check if this user
-        # is in the top 10% of users or not.  If they are (as defined by self.exp_thresh)
-        # we'll only use non-minor, non-reverting article edits for comparison.
-        # Otherwise, we use all articles the user edited.
-        user_editcount = 0
-        self.dbcursor.execute(self.get_edit_count_query,
-                              {'username': user,
-                               'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
-        for row in self.dbcursor.fetchall():
-            user_editcount = row['numedits']
-
-        # Grab the users edits...
-        if user_editcount >= self.exp_thresh:
-            self.dbcursor.execute(self.get_articles_by_expert_user_query,
-                                  {'username': user,
-                                   'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
-        else:
+        # Find common articles.  We first find the user's editcount, to check if this
+        # user is in the top 10% of users or not.  If they are (as defined by
+        # self.exp_thresh) we'll only use non-minor, non-reverting article edits
+        # for comparison.  Otherwise, we use all articles the user edited.
+        if self.get_editcount(user) < self.exp_thresh: 
             self.dbcursor.execute(self.get_articles_by_user_query,
                                   {'username': user,
                                    'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
+        else:
+            self.dbcursor.execute(self.get_articles_by_expert_user_query,
+                                  {'username': user,
+                                   'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
         for row in self.dbcursor.fetchall():
-            user_edits.add(row['page_title'])
+            user_edits.add(row['page_title'].decode())
+
         #print('Total edits by {0}: {1}'.format(user, len(user_edits)))
         #print('Size of target basket: {0}'.format(len(basket)))
         # Calculate association using the Jaccard Coefficient and Cosine Similarity test
