@@ -548,6 +548,8 @@ class CollabRecommender:
                                   {'username': user,
                                    'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
         else:
+            # Note: Removing reverts would be neat, but requires a lot of
+            # processing time, unless we can find a shortcut.
             self.dbcursor.execute(self.get_articles_by_expert_user_query,
                                   {'username': user,
                                    'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
