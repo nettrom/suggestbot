@@ -351,19 +351,17 @@ class CollabRecommender:
                 if not revert:
                     continue
 
-                if not rev_is_bot:
-                    # Decrement this editor too, we don't count reverts
-                    editors[rev_username]['numedits'] -= 1
-
                 # If the revert was done by a bot, or it was done in less
                 # than 5 minutes, decrement all intermediate editors.
                 timediff = revert.reverting['rev_timestamp'] \
                            - revert.reverteds[0]['rev_timestamp']
-                if rev_is_bot == 'bot' or timediff.seconds <= 300:
+                if (rev_is_bot == 'bot' or re.search("bot(\b|$)", rev_username, re.I) is not None) or timediff.seconds <= 300:
                     for intermediate in revert.reverteds:
                         editors[intermediate['rev_user']]['numedits'] -= 1
+                    if rev_is_bot == 'no' and re.search("bot(\b|$)", rev_username, re.I) is None:
+                        editors[rev_username]['numedits'] -= 1
 
-            print('found {0} candidate users'.format(len(editors)))
+            #print('found {0} candidate users'.format(len(editors)))
 
             for candidate_user, candata in editors.items():
                 # Already processed this user?
@@ -385,7 +383,7 @@ class CollabRecommender:
                     logging.info("{0} made only minor edits, but is above the edit threshold".format(candidate_user))
                     continue
 
-                print('Calculating association for User:{0}'.format(candidate_user))
+                #print('Calculating association for User:{0}'.format(candidate_user))
 
                 user_obj = RecUser(candidate_user, 0, 0, 0)
                 
@@ -451,7 +449,7 @@ class CollabRecommender:
             if is_bot == 'bot':
                 #print("{0} is a bot by flag".format(cand_name))
                 return(False)
-            if re.search("bot(\b|$)", cand_name, re.I):
+            if re.search("bot(\b|$)", cand_name, re.I) is not None:
                 print("{0} is a bot by name".format(cand_name))
                 return(False)
         except AttributeError:
