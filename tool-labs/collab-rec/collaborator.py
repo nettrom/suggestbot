@@ -40,8 +40,11 @@ from mw.lib import reverts
 ## defaultdict used to track edit counts
 from collections import defaultdict
 
+## Determine namespace string based on int
+import pywikibot
+
 class RecUser:
-    def __init__(self, username, assoc, shared, cosine):
+    def __init__(self, username, assoc, shared, cosine, overlap):
         '''
         Instantiate a user object.
     
@@ -64,6 +67,7 @@ class RecUser:
         self.assoc = assoc
         self.shared = shared
         self.cosine = cosine
+        self.overlap = overlap
 
 class CollabRecommender:
     def __init__(self, lang='en', revtable='revision_userindex',
@@ -115,7 +119,8 @@ class CollabRecommender:
 #---------------------------------------------------------------------------------------------------------------------
         
     def recommend(self, contribs, username, lang, cutoff,
-                  nrecs=100, threshold=3, backoff=0, test = 'jaccard'):
+                  namespaces=[0], nrecs=100, threshold=3, backoff=0,
+                  test = 'jaccard'):
 
         '''
         Find `nrecs` number of neighbours for a given user based on
@@ -132,6 +137,9 @@ class CollabRecommender:
 
         :param cutoff: Date and time from when to start looking for revisions
         :type cutoff: datetime.datetime
+
+        :param namespaces: Namespaces to base comparisons on
+        :type namespaces: list of int
 
         :param nrecs: Number of recommendations we seek
         :type nrecs: int
@@ -156,12 +164,16 @@ class CollabRecommender:
 
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.
-        self.get_articles_by_user_query = """SELECT DISTINCT page_title
+        self.get_articles_by_user_query = """SELECT
+             DISTINCT p.page_namespace, p.page_title
              FROM {revision_table} r
              JOIN page p
              ON r.rev_page=p.page_id
              WHERE rev_user_text = %(username)s
-             AND rev_timestamp >= %(timestamp)s""".format(revision_table=self.revtable)
+             AND rev_timestamp >= %(timestamp)s
+             AND p.page_namespace IN ({namespaces})""".format(
+                 revision_table=self.revtable,
+                 namespaces=",".join([str(ns) for ns in namespaces]))
 
         # Query to get edited articles for a user who is above the threshold,
         # we then disregard minor edits and reverts.
@@ -173,13 +185,17 @@ class CollabRecommender:
         #      WHERE rev_user_text = %(username)s
         #      AND rev_timestamp >= %(timestamp)s
         #      AND rev_minor_edit=0""".format(revision_table=self.revtable)
-        self.get_articles_by_expert_user_query = """SELECT DISTINCT p.page_title
+        self.get_articles_by_expert_user_query = """SELECT
+             DISTINCT p.page_namespace, p.page_title
              FROM {revision_table} r
              JOIN page p
              ON r.rev_page=p.page_id
              WHERE rev_user_text = %(username)s
              AND rev_timestamp >= %(timestamp)s
-             AND rev_minor_edit=0""".format(revision_table=self.revtable)
+             AND rev_minor_edit=0
+             AND p.page_namespace IN ({namespaces})""".format(
+                 revision_table=self.revtable,
+                 namespaces=",".join([str(ns) for ns in namespaces]))
 
         # Query to get the number of edits a user has made (in our dataset)
         # might want to limit this to namespace 0 (articles)
@@ -214,7 +230,7 @@ class CollabRecommender:
 
         db.disconnect(self.dbconn, self.dbcursor)
         # Return truncated to nrecs, switched from list of objects to list of dicts
-        return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
+        return([{'item': rec.username, 'value': rec.assoc, 'overlap': rec.overlap} for rec in recs[:nrecs]])
 
     def get_recs_at_coedit_threshold(self, username, contribs, test):
         '''
@@ -230,8 +246,10 @@ class CollabRecommender:
         :type test: str
         '''
         
-        # This query gets users who made edits to the article. Reverts, IPs, bot names, and minor edits for experienced users
-        # will be filtered out of the resulting set.
+        # This query gets users who made edits to the article. Reverts, IPs,
+        # bot names, and minor edits for experienced users will be filtered out
+        # of the resulting set.
+        # FIXME: handle namespaces correctly...
         get_users_by_article_query = """SELECT r.rev_user, r.rev_user_text,
             r.rev_timestamp, r.rev_minor_edit, r.rev_id, r.rev_sha1,
             IFNULL(ug.ug_group, 'no') AS is_bot
@@ -247,6 +265,7 @@ class CollabRecommender:
 
         # This query fetches the hashes and IDs of the fifteen edits prior
         # to the examined tate range to identify reverts..
+        # FIXME: handle namespaces correctly
         get_revision_history_query = """SELECT r.rev_sha1,
             r.rev_id, r.rev_timestamp, r.rev_user_text
         FROM revision r
@@ -261,6 +280,7 @@ class CollabRecommender:
         # Found co-editors, and recommendations we'll return
         coeditor_objs = {}
         recs = []
+        coeditors_seen = defaultdict(lambda: False)
 
         logging.info("recommending for user '{0}'".format(username))
 
@@ -355,17 +375,21 @@ class CollabRecommender:
                 # than 5 minutes, decrement all intermediate editors.
                 timediff = revert.reverting['rev_timestamp'] \
                            - revert.reverteds[0]['rev_timestamp']
-                if (rev_is_bot == 'bot' or re.search("bot(\b|$)", rev_username, re.I) is not None) or timediff.seconds <= 300:
+                if rev_is_bot == 'bot' \
+                   or re.search("bot(\\b|$)", rev_username, re.I) \
+                   or timediff.seconds <= 300:
                     for intermediate in revert.reverteds:
                         editors[intermediate['rev_user']]['numedits'] -= 1
-                    if rev_is_bot == 'no' and re.search("bot(\b|$)", rev_username, re.I) is None:
+                    # If the revert was done by a user, decrement them as well
+                    if rev_is_bot == 'no' \
+                       and not re.search("bot(\\b|$)", rev_username, re.I):
                         editors[rev_username]['numedits'] -= 1
 
             #print('found {0} candidate users'.format(len(editors)))
 
             for candidate_user, candata in editors.items():
                 # Already processed this user?
-                if candidate_user in coeditor_objs:
+                if coeditors_seen[candidate_user]:
                     continue
 
                 # No edits means they were reverted
@@ -384,13 +408,12 @@ class CollabRecommender:
                     continue
 
                 #print('Calculating association for User:{0}'.format(candidate_user))
-
-                user_obj = RecUser(candidate_user, 0, 0, 0)
                 
-                # Add user to coeditor_objs so we'll skip this user later
-                coeditor_objs[candidate_user] = user_obj
+                # Add user to coeditors_seen so we'll skip this user later
+                coeditors_seen[candidate_user] = True
+                
 
-                (assoc, shared, cosine) = self.user_association(candidate_user,
+                (assoc, shared, cosine, overlap) = self.user_association(candidate_user,
                                                                 contribs)
                 user_acc_ct += 1
                 logging.info('user={0}, assoc={1}, shared={2}, cosine={3}'.format(
@@ -398,29 +421,25 @@ class CollabRecommender:
                 if assoc < self.assoc_thresh:
                     continue
 
-                user_obj.assoc = assoc
-                user_obj.shared = shared
-                user_obj.cosine = cosine
+                user_obj = RecUser(candidate_user, assoc, shared, cosine, overlap)
+                coeditor_objs[candidate_user] = user_obj
 
         #logging.info("Found {0} pre-neighbours".format(len(coeditor_objs)))
-        print("Number of applicable users found: {0}; Number of user acc calls: {1}".format(len(coeditor_objs), user_acc_ct))
-
-        # Find nhood of top k users
-        k = 250  # Larger nhood for more recs, hopefully
+        #print("Number of applicable users found: {0}; Number of user acc calls: {1}".format(len(coeditor_objs), user_acc_ct))
 
         # Return results sorted according to "test" parameter
         if test == 'jaccard':
             recs = sorted(coeditor_objs.values(),
                           key=operator.attrgetter('assoc'),
-                          reverse=True)[:k]
+                          reverse=True)
         elif test == 'cosine':
             recs = sorted(coeditor_objs.values(),
                           key=operator.attrgetter('cosine'),
-                          reverse=True)[:k]
+                          reverse=True)
         elif test == 'coedit':
             recs = sorted(coeditor_objs.values(),
                           key=operator.attrgetter('shared'),
-                          reverse=True)[:k]
+                          reverse=True)
         return recs
 
     def valid_editor(self, cand_name, cand_id, is_bot, username):
@@ -449,8 +468,8 @@ class CollabRecommender:
             if is_bot == 'bot':
                 #print("{0} is a bot by flag".format(cand_name))
                 return(False)
-            if re.search("bot(\b|$)", cand_name, re.I) is not None:
-                print("{0} is a bot by name".format(cand_name))
+            if re.search("bot(\\b|$)", cand_name, re.I):
+                # print("{0} is a bot by name".format(cand_name))
                 return(False)
         except AttributeError:
             return(False)
@@ -536,6 +555,8 @@ class CollabRecommender:
         assoc = 0
         shared = 0
         user_edits = set()
+        # FIXME: internationalise site object
+        site = pywikibot.Site('en')
 
         # Find common articles.  We first find the user's editcount, to check if this
         # user is in the top 10% of users or not.  If they are (as defined by
@@ -552,7 +573,14 @@ class CollabRecommender:
                                   {'username': user,
                                    'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
         for row in self.dbcursor.fetchall():
-            user_edits.add(row['page_title'].decode())
+            if row['page_namespace']:
+                print("non-zero namespace")
+                user_edits.add("{0}:{1}".format(
+                    site.namespaces[row['page_namespace']].custom_name,
+                    row['page_title'].decode()))
+            else:
+                user_edits.add(row['page_title'].decode())
+            
 
         #print('Total edits by {0}: {1}'.format(user, len(user_edits)))
         #print('Size of target basket: {0}'.format(len(basket)))
@@ -562,5 +590,5 @@ class CollabRecommender:
             union = len(user_edits | basket)
             assoc = float(shared) / union
             cosine = float(shared) / (math.sqrt(len(user_edits)) * math.sqrt(len(basket)))
-            return(assoc, shared, cosine)
+            return(assoc, shared, cosine, user_edits & basket)
         return(0, 0, 0)
