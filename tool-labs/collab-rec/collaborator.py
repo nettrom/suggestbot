@@ -116,10 +116,13 @@ class CollabRecommender:
         self.dbconn = None
         self.dbcursor = None
 
+        # Pywikibot Site object
+        self.site = None
+
 #---------------------------------------------------------------------------------------------------------------------
         
     def recommend(self, contribs, username, lang, cutoff,
-                  namespaces=[0], nrecs=100, threshold=3, backoff=0,
+                  namespaces=["0"], nrecs=100, threshold=3, backoff=0,
                   test = 'jaccard'):
 
         '''
@@ -139,7 +142,7 @@ class CollabRecommender:
         :type cutoff: datetime.datetime
 
         :param namespaces: Namespaces to base comparisons on
-        :type namespaces: list of int
+        :type namespaces: list of str
 
         :param nrecs: Number of recommendations we seek
         :type nrecs: int
@@ -165,7 +168,7 @@ class CollabRecommender:
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.
         self.get_articles_by_user_query = """SELECT
-             DISTINCT p.page_namespace, p.page_title
+             DISTINCT p.page_id
              FROM {revision_table} r
              JOIN page p
              ON r.rev_page=p.page_id
@@ -173,7 +176,7 @@ class CollabRecommender:
              AND rev_timestamp >= %(timestamp)s
              AND p.page_namespace IN ({namespaces})""".format(
                  revision_table=self.revtable,
-                 namespaces=",".join([str(ns) for ns in namespaces]))
+                 namespaces=",".join(namespaces))
 
         # Query to get edited articles for a user who is above the threshold,
         # we then disregard minor edits and reverts.
@@ -186,7 +189,7 @@ class CollabRecommender:
         #      AND rev_timestamp >= %(timestamp)s
         #      AND rev_minor_edit=0""".format(revision_table=self.revtable)
         self.get_articles_by_expert_user_query = """SELECT
-             DISTINCT p.page_namespace, p.page_title
+             DISTINCT p.page_id
              FROM {revision_table} r
              JOIN page p
              ON r.rev_page=p.page_id
@@ -195,7 +198,7 @@ class CollabRecommender:
              AND rev_minor_edit=0
              AND p.page_namespace IN ({namespaces})""".format(
                  revision_table=self.revtable,
-                 namespaces=",".join([str(ns) for ns in namespaces]))
+                 namespaces=",".join(namespaces))
 
         # Query to get the number of edits a user has made (in our dataset)
         # might want to limit this to namespace 0 (articles)
@@ -221,6 +224,8 @@ class CollabRecommender:
         if not self.dbconn:
             logging.error("Failed to connect to database")
             return(recs)
+
+        self.site = pywikibot.Site(lang)
 
         # Turn contributions into a set, as we'll only use it that way
         contribs = set(contribs)
@@ -249,17 +254,13 @@ class CollabRecommender:
         # This query gets users who made edits to the article. Reverts, IPs,
         # bot names, and minor edits for experienced users will be filtered out
         # of the resulting set.
-        # FIXME: handle namespaces correctly...
         get_users_by_article_query = """SELECT r.rev_user, r.rev_user_text,
             r.rev_timestamp, r.rev_minor_edit, r.rev_id, r.rev_sha1,
             IFNULL(ug.ug_group, 'no') AS is_bot
-        FROM page p
-        JOIN revision_userindex r
-        ON p.page_id=r.rev_page
+        FROM revision_userindex r
         LEFT JOIN (SELECT * FROM user_groups WHERE ug_group='bot') ug
         ON r.rev_user=ug.ug_user
-        WHERE p.page_namespace=0
-        AND p.page_title=%(title)s
+        WHERE rev_page=%(page_id)s
         AND r.rev_timestamp >= %(timestamp)s
         ORDER BY r.rev_timestamp ASC"""
 
@@ -269,10 +270,7 @@ class CollabRecommender:
         get_revision_history_query = """SELECT r.rev_sha1,
             r.rev_id, r.rev_timestamp, r.rev_user_text
         FROM revision r
-        JOIN page p
-        ON r.rev_page=p.page_id
-        WHERE p.page_namespace=0
-        AND p.page_title=%(title)s
+        WHERE rev_page=%(page_id)s
         AND r.rev_timestamp < %(timestamp)s
         ORDER BY r.rev_timestamp DESC
         LIMIT %(k)s"""
@@ -280,7 +278,7 @@ class CollabRecommender:
         # Found co-editors, and recommendations we'll return
         coeditor_objs = {}
         recs = []
-        coeditors_seen = defaultdict(lambda: False)
+        seen_users = set()
 
         logging.info("recommending for user '{0}'".format(username))
 
@@ -290,19 +288,16 @@ class CollabRecommender:
         
         user_acc_ct = 0
         
-        for item in contribs:
+        for item_id in contribs:
             # For each article the user has edited, find other editors.
-            #logging.info('checking article: {0}'.format(item))
-            
-            # Translate " " to "_"
-            item = item.replace(" ", "_")
+            #logging.info('checking article: {0}'.format(item_id))
 
             # Load up the revert detector with the 15 edits prior to
             # the first one we'll process.
             detector = reverts.Detector()
             try:
                 self.dbcursor.execute(get_revision_history_query,
-                                      {'title': item,
+                                      {'page_id': item_id,
                                        'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S'),
                                        'k': 15})
             except MySQLdb.Error as e:
@@ -323,7 +318,7 @@ class CollabRecommender:
                 except AttributeError:
                     continue
             
-            # Get all contributors to item; Remove bots and reverts
+            # Get all contributors to item_id; Remove bots and reverts
 
             # editors maps usernames to a list containing a contribution count
             # and a boolean indicating whether the user should be included
@@ -332,7 +327,7 @@ class CollabRecommender:
             edits = {}
             try:
                 self.dbcursor.execute(get_users_by_article_query,
-                                      {'title': item,
+                                      {'page_id': item_id,
                                        'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
             except MySQLdb.Error as e:
                 logging.error("unable to execute query to get users by article")
@@ -389,7 +384,7 @@ class CollabRecommender:
 
             for candidate_user, candata in editors.items():
                 # Already processed this user?
-                if coeditors_seen[candidate_user]:
+                if candidate_user in seen_users:
                     continue
 
                 # No edits means they were reverted
@@ -410,8 +405,7 @@ class CollabRecommender:
                 #print('Calculating association for User:{0}'.format(candidate_user))
                 
                 # Add user to coeditors_seen so we'll skip this user later
-                coeditors_seen[candidate_user] = True
-                
+                seen_users.add(candidate_user)
 
                 (assoc, shared, cosine, overlap) = self.user_association(candidate_user,
                                                                 contribs)
@@ -489,7 +483,7 @@ class CollabRecommender:
         nedits = kwargs.get('default', self.exp_thresh)
 
         try:
-            return(self.nedit_map[username])
+            nedits = self.nedit_map[username]
         except KeyError:
             try:
                 self.dbcursor.execute(self.get_edit_count_query,
@@ -555,8 +549,6 @@ class CollabRecommender:
         assoc = 0
         shared = 0
         user_edits = set()
-        # FIXME: internationalise site object
-        site = pywikibot.Site('en')
 
         # Find common articles.  We first find the user's editcount, to check if this
         # user is in the top 10% of users or not.  If they are (as defined by
@@ -573,14 +565,7 @@ class CollabRecommender:
                                   {'username': user,
                                    'timestamp': self.cutoff.strftime('%Y%m%d%H%M%S')})
         for row in self.dbcursor.fetchall():
-            if row['page_namespace']:
-                print("non-zero namespace")
-                user_edits.add("{0}:{1}".format(
-                    site.namespaces[row['page_namespace']].custom_name,
-                    row['page_title'].decode()))
-            else:
-                user_edits.add(row['page_title'].decode())
-            
+            user_edits.add(row['page_id'])
 
         #print('Total edits by {0}: {1}'.format(user, len(user_edits)))
         #print('Size of target basket: {0}'.format(len(basket)))

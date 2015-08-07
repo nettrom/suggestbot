@@ -94,9 +94,6 @@ def main():
                
     print("Beginning collaborator recommendation test")
 
-    total_recs = 0
-    total_overlap = 0
-
     members = ['Slatersteven', 'WerWil', 'Fnlayson', 'Drrcs15', 'Turbothy',
                '21stCenturyGreenstuff', 'RGFI', 'Loesorion', 'Grahamdubya', 'Sioraf',
                'Skittles the hog', 'Smoth 007', 'Superfly94', 'Ewulp', 'Dank', 'Magus732',
@@ -123,95 +120,91 @@ def main():
     #            'Ranger Steve', 'MisterBee1966']
 
     # members = ['XavierItzm']
-    
+
+    # Store namespaces as a list of str
     namespaces_list = args.namespaces.split(',')
-    namespaces_list = list(map(int, namespaces_list))
     
-    get_contribs_query = '''SELECT rev_id, page_title
+    get_contribs_query = '''SELECT rev_id, page_id
     FROM page JOIN revision_userindex
     ON page_id=rev_page
-    WHERE rev_minor_edit=0
+    WHERE page_namespace IN ({namespaces})
+    AND rev_minor_edit=0
     AND rev_deleted=0
     AND rev_user_text=%(username)s
     ORDER BY rev_id DESC
     LIMIT %(k)s
-    '''
+    '''.format(namespaces=",".join(namespaces_list))
 
-    ## Probably set k to 500, and remember to use cursor.fetchall()
-    
-    dbconn = None
-    dbcursor = None
-    
-    (dbconn, dbcursor) = db.connect(dbhost='c3.labsdb')
+    ## Set number of recommendations to 50 for now,
+    ## which allows us to calculate overlap for 10,20,30,40, and 50 recs
+    nrecs = 50
+
+    ## Measuring total number of recommendations and overlap per size of
+    ## recommendations requested.
+    total_recs = {10: 0, 20: 0, 30: 0, 40: 0, 50: 0}
+    total_overlap = {10: 0, 20: 0, 30: 0, 40: 0, 50: 0}
     
     for member in members:
     
         contribs = set()
-    
+
         try:
+            ## Note: connecting and disconnecting to prevent the DB
+            ## from disconnecting us due to inactivity
+            (dbconn, dbcursor) = db.connect(dbhost='c3.labsdb')
+
+            ## Asking for 500 contributions per namespace, just in case.
             dbcursor.execute(get_contribs_query,
                              {'username': member,
-                              'k': 500})
+                              'k': 500*len(namespaces_list)})
+            for row in dbcursor.fetchall():
+                try:
+                    contribs.add(row['page_id'])
+                    if len(contribs) == 128:
+                        break
+                except AttributeError:
+                    continue
+            db.disconnect(dbconn, dbcursor)
         except MySQLdb.Error as e:
             logging.error("unable to execute query to get users by article")
             logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
             return(False)
-            
-        for row in dbcursor.fetchall():
-            try:
-                contribs.add(row['page_title'].decode())
-                if len(contribs) == 128:
-                    break
-            except AttributeError:
-                continue
-
-        ## TODO: Switch to database contributions
-            
-        '''user = pywikibot.User(site, member)
-        contribs = set()
-        for (page, revid, time, comment) in user.contributions(500,
-                                                               namespaces = namespaces_list):
-            contribs.add(page.title())	
-            if len(contribs) == 128:
-                break'''
 
         # Calculate the cutoff date
         cutoff = datetime.now() - timedelta(days=args.cutoff*30)
         matches = recommender.recommend(contribs, member, 'en', cutoff,
                                         namespaces=namespaces_list,
-                                        nrecs=args.nrecs, backoff=1, test=args.test)
-        match_set = set([rec['item'] for rec in matches])
-        overlap = match_set & all_members
-        for user in overlap:
-            print(user)
-            for data in matches:
-                if data['item'] == user:
-                    print(data['overlap'])
-                    break
+                                        nrecs=nrecs, backoff=1, test=args.test)
+        for k in range(10, 60, 10):
+            match_set = set([rec['item'] for rec in matches[:k]])
+            overlap = match_set & all_members
         
-        total_recs += len(match_set)
-        total_overlap += len(overlap)
+            total_recs[k] += len(match_set)
+            total_overlap[k] += len(overlap)
 
-        print('Got {n} recommendations for User:{user}'.format(n=len(match_set),
-                                                               user=member))
-        print('Overlap with all members: {0}'.format(len(overlap)))
+            print('Requested {k}, got {n} recommendations for User:{user}'.format(
+                k=k, n=len(match_set), user=member))
+            print('Overlap with all members: {0}'.format(len(overlap)))
        
         #for i in range(0, len(match_set)):
         #    print(match_set.pop())
 
     # Print stats to stdout, and append stats to output file
-    print('''Total statistics:
-    Number of recommendations: {n}
-    Overlap with all members: {o}
-    % overlap: {p:.2}'''.format(n=total_recs, o=total_overlap,
-                                p=100*float(total_overlap)/float(total_recs)))
-    with open(args.output_file, 'a') as outfile:
-        outfile.write('{n}\t{t}\t{nrecs}\t{int_n}\t{int_p:.2}\n'.format(
-            n=args.nrecs, t=args.cutoff, nrecs=total_recs, int_n=total_overlap,
-            int_p=100*float(total_overlap)/float(total_recs)))
+    for k in range(10, 60, 10):
+        print('''Total statistics:
+        Number of requested recs per user: {k}
+        Number of recommendations: {n}
+        Overlap with all members: {o}
+        % overlap: {p:.2}'''.format(k=k, n=total_recs[k], o=total_overlap[k],
+                                    p=100*float(total_overlap[k])/float(total_recs[k])))
+
+        with open(args.output_file, 'a') as outfile:
+            outfile.write('{n}\t{t}\t{nrecs}\t{ns}\t{int_n}\t{int_p:.2}\n'.format(
+                n=k, t=args.cutoff, nrecs=total_recs[k], int_n=total_overlap[k],
+                ns=",".join(namespaces_list),
+                int_p=100*float(total_overlap[k])/float(total_recs[k])))
+
     print('Recommendation test complete')
     
-    db.disconnect(self.dbconn, self.dbcursor)
-	
 if __name__ == "__main__":
     main()
