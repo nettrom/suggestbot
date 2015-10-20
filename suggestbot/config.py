@@ -745,7 +745,7 @@ wikiproject_template = 'User:SuggestBot/WikiProject suggestions'
 wikiproject_config_url = 'https://tools.wmflabs.org/projanalysis/config.php'
 
 ## Subpage-name to post to for projects discovered through the WPX URL
-wikiproject_subpage = 'Edit articles'
+wikiproject_subpage = 'Tasks/SuggestBot'
 
 ## List of pages to ignore requests from
 wikiproject_ignores = []

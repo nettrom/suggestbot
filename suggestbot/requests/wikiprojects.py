@@ -141,11 +141,13 @@ class WikiProjectHandler(RequestTemplateHandler):
         i = 0
         while len(proj_articles) < config.wikiproject_articles \
               and i < len(config.wikiproject_qual_prefixes):
+            ## Note: strips out 'WikiProject ' because category names do not
+            ## contain that.
             cat = pywikibot.Category(
                 self.site,
                 '{prefix} {proj} {suffix}'.format(
                     prefix=config.wikiproject_qual_prefixes[i],
-                    proj=project_name,
+                    proj=project_name.replace('WikiProject ', ''),
                     suffix=config.wikiproject_suffix[self.lang]))
             for page in cat.articles(namespaces=[0,1],
                                      sortby='timestamp',
@@ -283,14 +285,13 @@ class WikiProjectHandler(RequestTemplateHandler):
             ## If we didn't find any articles in that category, go see
             ## if the project has categories for articles by assessment rating.
             if not project.pages:
+                logging.info('Did not find any articles for {0} in the main project category, checking assessment categories'.format(project.name))
                 project.pages = self.get_wikiproject_pages(project.name)
-                
-            
+
         ## For each project in the queue, create the Request object,
         ## update the database, get suggestions, complete the request
-        ## FIXME: remove the project limit!
         for project in wproj_queue[:1]:
-            print('Now processing {0}'.format(project.name))
+            logging.info('Suggesting articles to {0}'.format(project.name))
             rec_req = request.Request(lang=self.lang,
                                       username=project.name,
                                       page=project.page,
@@ -329,21 +330,16 @@ class WikiProjectHandler(RequestTemplateHandler):
                                              self.method_name,
                                              add_include_clause=True);
             
-            ## Edit the page
-            test_page = pywikibot.Page(self.site,
-                                       'User:Nettrom/sandbox/templates')
             try:
-                # page_source = mwp.parse(project.page.get())
-                page_source = mwp.parse(test_page.get())
+                page_source = project.page.get()
             except pywikibot.exceptions.NoPage:
                 page_source = ''
 
-            # project.page.text = self.edit_invoke(page_source, rec_msg)
-            test_page.text = self.edit_invoke(page_source, rec_msg)
+            project.page.text = self.edit_invoke(page_source, rec_msg)
             
             try:
-                # project.page.save(summary=config.edit_comment, minor=False)
-                test_page.save(summary=config.edit_comment, minor=False)
+                project.page.save(summary=config.edit_comment[self.lang],
+                                  minor=False)
             except pywikibot.exceptions.EditConflig:
                 logging.error('Posting recommendations to {page} failed, edit conflict, will try again later'.format(page=project.page.title()))
                 return False
