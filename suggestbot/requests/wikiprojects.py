@@ -54,7 +54,9 @@ class WikiProjectRequest:
 
 class WikiProjectHandler(RequestTemplateHandler):
     def __init__(self, bot, lang=u'en',
-                 name_pattern='^WikiProject'):
+                 name_pattern='^WikiProject',
+                 module_name='User:SuggestBot/WikiProjects',
+                 method_name='suggestions'):
         """
         Initialise an object that will handle WikiProject requests
         added to WikiProject pages.
@@ -68,13 +70,19 @@ class WikiProjectHandler(RequestTemplateHandler):
         :param name_pattern: Regular expression pattern to match names of pages,
                              if a page does not match this pattern it is not processed.
         :type name_pattern: unicode
+
+        :param module_name: Name of the module 
         """
         
         super(self.__class__, self).__init__(lang=lang,
                                              templates={},
                                              ignoreList=config.wikiproject_ignores)
+        self.invoke_pattern = re.compile('#invoke', re.I)
         self.name_pattern = re.compile(name_pattern, re.I)
         self.wikiproject_template = config.wikiproject_template.lower()
+
+        self.module_name = module_name
+        self.method_name = method_name
 
         self.bot = bot
         self.db = db.SuggestBotDatabase()
@@ -83,6 +91,78 @@ class WikiProjectHandler(RequestTemplateHandler):
         # and sub page parts.
         self.subpage_re = re.compile('(?P<projname>[^/]+)(?P<subname>/.*)')
 
+    def edit_invoke(self, page_source, new_invoke):
+        '''
+        Parse the given page source wikitext. If an existing SuggestBot
+        module invoke is present, replace it, otherwise add it to the
+        end of the page.
+
+        :param page_source: The source wikitext we're editing
+        :type page_source: str
+
+        :param new_invoke: The new invoke text to edit/insert
+        :type new_invoke: str
+        '''
+        parsed_text = mwp.parse(page_source)
+
+        i = 0
+        edited = False
+        while i < len(parsed_text.nodes):
+            node = parsed_text.nodes[i]
+            if isinstance(node, mwp.nodes.template.Template) \
+               and re.match(self.invoke_pattern, str(node.name)) \
+               and re.search(self.module_name, str(node.name)):
+                # It's a template that's an invoke call,
+                # and it's matching our module, edit it
+                parsed_text.nodes[i] = new_invoke
+                edited = True
+                break
+            else:
+                i += 1
+
+        if not edited:
+            parsed_text.nodes.append(new_invoke)
+
+        return str(parsed_text)
+
+    def get_wikiproject_pages(self, project_name):
+        '''
+        Fetch articles from this project's categories for articles
+        organised by quality class. Only gets up to `wikiproject_articles`
+        number of articles, if the project has more than that.      
+
+        :param project_name: Name of the project, to be used in category names
+        :type project_name: str
+        '''
+
+        ## Can use a list instead of a set, because it's unlikely that
+        ## a project has the same article in two assessment classes.
+        proj_articles = []
+        i = 0
+        while len(proj_articles) < config.wikiproject_articles \
+              and i < len(config.wikiproject_qual_prefixes):
+            cat = pywikibot.Category(
+                self.site,
+                '{prefix} {proj} {suffix}'.format(
+                    prefix=config.wikiproject_qual_prefixes[i],
+                    proj=project_name,
+                    suffix=config.wikiproject_suffix[self.lang]))
+            for page in cat.articles(namespaces=[0,1],
+                                     sortby='timestamp',
+                                     reverse=True):
+                if page.namespace() == 0:
+                    proj_articles.append(page)
+                else:
+                    proj_articles.append(page.toggleTalkPage())
+
+            i += 1
+
+        ## If we have more than we should, trim the list...
+        if len(proj_articles) > config.wikiproject_articles:
+            proj_articles = proj_articles[config.wikiproject_articles:]
+
+        return(proj_articles)
+    
     def process_requests(self):
         '''
         Find and process all WikiProject requests for suggestions.  Requests
@@ -99,10 +179,11 @@ class WikiProjectHandler(RequestTemplateHandler):
         wproj_reqs = {} # maps project name to project request object
         wproj_queue = [] # project's we'll post suggestions to
 
-        # Find transclusions of the WikiProject template
+        # Find transclusions of the WikiProject template in the
+        # Wikipedia and Wikipedia talk namespaces.
         template_page = pywikibot.Page(self.site, config.wikiproject_template)
         for tr_page in template_page.embeddedin(filter_redirects=False,
-                                                namespaces=[3,4],
+                                                namespaces=[4,5],
                                                 content=True):
             if tr_page.title() in self.ignoreList:
                 continue
@@ -138,7 +219,7 @@ class WikiProjectHandler(RequestTemplateHandler):
         req = requests.get(config.wikiproject_config_url)
         wpx_config = req.json()
         for project in wpx_config['projects']:
-            print(project)
+            ## If there's a suggestbot config variable and it's true...
             if 'suggestbot' in project and project['suggestbot']:
                 project_page = pywikibot.Page(self.site, project['name'])
                 project_name = project_page.title(withNamespace=False)
@@ -146,10 +227,8 @@ class WikiProjectHandler(RequestTemplateHandler):
                     self.site, '{project}/{subpage}'.format(
                         project=project_page.title(),
                         subpage=config.wikiproject_subpage))
-                project_category = pywikibot.Page(
-                    self.site, '{catns}:{source}'.format(
-                        catns=self.site.category_namespace(),
-                        source=project['source']))
+                project_category = pywikibot.Category(
+                    self.site, project['source'])
 
                 ## Store the request
                 wproj_reqs[project_name] = WikiProjectRequest(
@@ -159,36 +238,59 @@ class WikiProjectHandler(RequestTemplateHandler):
         ## Go through all requests and add all projects where it's time
         ## to post again to the project queue.
         wproj_queue = []
-        today = datetime.now(timezone.utc).date()
+        now = datetime.now(timezone.utc)
         for project in wproj_reqs.values():
+            ## Default is to process this project
+            wproj_queue.append(project)
+
+            ## Check the edit history, assuming that if we've edited,
+            ## we've done so in the past 50 edits...
             try:
                 for (revid, revtime, revuser, revcomment) \
                     in project.page.getVersionHistory(total=50):
-                    # NOTE: we assume we're found in < 50 revisions
-                    if revuser == self.site.user() \
-                       and (today - revtime.date()).days >= config.wikiproject_delay:
-                        wproj_queue.append(project)
+                    # revtime is UTC, but Python doesn't know, so add tz
+                    time_since = now - revtime.replace(tzinfo=timezone.utc)
+                    if revuser == self.site.user():
+                        # is it too soon?
+                        if time_since.days < (config.wikiproject_delay -1):
+                            wproj_queue.pop()
+                            break
+                        elif time_since.days == (config.wikiproject_delay -1) \
+                             and time_since.seconds < 86400/2:
+                            ## We check if we're less than half a day away,
+                            ## otherwise the delay in generating suggestions
+                            ## makes us always update it too late.
+                            wproj_queue.pop()
+                            break
+                        
             except pywikibot.exceptions.NoPage:
-                ## Page doesn't exist yet, we can go create it with suggestions
-                wproj_queue.append(project)
+                ## Project page doesn't exist, process project and create it...
+                pass
 
         # Go through all requests that are to be processed, fetch articles
         # from project categories
         for project in wproj_queue:
             if not project.category:
-                ## Figure out the WikiProject's category name, create the page
-                project.category = pywikibot.Page(
+                ## Figure out the WikiProject's category name
+                project.category = pywikibot.Category(
                     self.site,
-                    "{catns}:{project}{suffix}".format(
-                        catns=self.site.category_namespace(),
+                    "{project}{suffix}".format(
                         project=project.name,
                         suffix=config.wikiproject_suffix))
 
             project.pages = self.get_category_pages(project.category)
 
+            ## If we didn't find any articles in that category, go see
+            ## if the project has categories for articles by assessment rating.
+            if not project.pages:
+                project.pages = self.get_wikiproject_pages(project.name)
+                
+            
         ## For each project in the queue, create the Request object,
         ## update the database, get suggestions, complete the request
-        for project in wproj_queue:
+        ## FIXME: remove the project limit!
+        for project in wproj_queue[:1]:
+            print('Now processing {0}'.format(project.name))
             rec_req = request.Request(lang=self.lang,
                                       username=project.name,
                                       page=project.page,
@@ -221,29 +323,27 @@ class WikiProjectHandler(RequestTemplateHandler):
                 else:
                     continue
 
-            # Turn recommendations into a complete wikitext subst-string
-            rec_msg = self.bot.createRecsPage(userRecs['recs']);
+            ## Turn recommendations into a Lua-module template invoke-call.
+            rec_msg = self.bot.create_invoke(userRecs['recs'],
+                                             self.module_name,
+                                             self.method_name,
+                                             add_include_clause=True);
             
-            # Post suggestions
-            parsed_text = mwp.parse(project.page.get())
-            ## Basically: skip noinclude (the page is supposed to be transcluded),
-            ## and the SuggestBot template. Delete everything else.
-            i = 0
-            while i < len(parsed_text.nodes):
-                node = parsed_text.nodes[i]
-                if (hasattr(node, 'tag') and node.tag == 'noinclude') \
-                   or (isinstance(node, mwp.nodes.template.Template)):
-                    i += 1
-                else:
-                    del(parsed_text.nodes[i])
-
-            project.page.text = '{current}{recs}'.format(
-                current=parsed_text, recs=rec_msg)
-
+            ## Edit the page
+            test_page = pywikibot.Page(self.site,
+                                       'User:Nettrom/sandbox/templates')
             try:
-                print('We are only testing, here is the new page source')
-                print(project.page.text)
+                # page_source = mwp.parse(project.page.get())
+                page_source = mwp.parse(test_page.get())
+            except pywikibot.exceptions.NoPage:
+                page_source = ''
+
+            # project.page.text = self.edit_invoke(page_source, rec_msg)
+            test_page.text = self.edit_invoke(page_source, rec_msg)
+            
+            try:
                 # project.page.save(summary=config.edit_comment, minor=False)
+                test_page.save(summary=config.edit_comment, minor=False)
             except pywikibot.exceptions.EditConflig:
                 logging.error('Posting recommendations to {page} failed, edit conflict, will try again later'.format(page=project.page.title()))
                 return False

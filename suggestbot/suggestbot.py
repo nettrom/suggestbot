@@ -185,6 +185,100 @@ class SuggestBot:
 
         return recs
 
+    def create_invoke(self, recs, module_name, method_name,
+                      cat_order=[], add_include_clause=False):
+        '''
+        Construct the appropriate Lua-module invoke call, invoking the
+        given module & method, passing in the given set of recommendations.
+
+        :param recs: The recommendations to pass in as parameters
+        :type recs: dict
+
+        :param module_name: Name of the module to invoke
+        :type module_name: str
+
+        :param method_name: Name of the publicly exposed method to invoke
+        :type method_name: str
+
+        :param cat_order: List of category names in the order they should
+                          be passed in as parameters.  The articles will
+                          be sorted in order of categories first, if this
+                          list is something else than empty.  Note: this
+                          list _must_ contain all categories used in the
+                          accompanying recommendations.
+
+        :param add_include_clause: Should an "includeonly" clause that
+                                   passes an "is_included" parameter to
+                                   the invoke call be used? Allows the module
+                                   to know whether it is displayed on a page
+                                   that is transcluded.
+        :type add_include_clause: bool
+        '''
+
+        ## Mapping of old task names to new task names (used in the Lua module)
+        task_translations = {
+            'headings': 'headings',
+            'length': 'content',
+            'completeness': 'links',
+            'lengthToRefs': 'sources',
+            'numImages': 'images'}
+
+        for rec_title, rec_data in recs.items():
+            ## Lowercase category and strip away numbers
+            rec_data['cat'] = rec_data['cat'].lower()
+            rec_data['cat'] = re.sub(r'(\w+)\d+', r'\1', rec_data['cat'])
+            ## Capitalise assessment rating, use 'NA' if no rating
+            if rec_data['qual'] == 'NOCLASS':
+                rec_data['qual'] = 'NA'
+            else:
+                rec_data['qual'] = rec_data['qual'].capitalize()
+        
+        ## Note: format needs quadruple brackets
+        invoke_text = '{{{{#invoke:{module}|{method}'.format(module=module_name,
+                                                             method=method_name)
+        if add_include_clause:
+            invoke_text += '<includeonly>|is_included=yes</includeonly>\n'
+        
+        if cat_order:
+            ## Sort the recommendations based on categories
+            try:
+                recs = sorted(recs,
+                              lambda rec: cat_order.index(rec[1]['cat']))
+            except ValueError:
+                ## We're probably here because 'cat' wasn't in cat_order...
+                pass
+
+        if not isinstance(recs, list):
+            recs = recs.items()
+
+        for rec_title, rec_data in recs:
+            ## Example line of invoke parameters for a recommendation
+            ## '|source|Fender Showmaster|30|Stub|Stub|content,headings,links,sources'
+            
+            ## Was popcount calculated? IF not, set it to an empty string,
+            ## {{formatnum:}} seems to handle that nicely.
+            if not 'popcount' in rec_data \
+               or rec_data['popcount'] < 0:
+                rec_data['popcount'] = ''
+
+            invoke_text += '|{cat}|{title}|{views}|{rating}|{prediction}|{tasks}\n'.format(
+                cat=rec_data['cat'],
+                title=rec_title,
+                views=rec_data['popcount'],
+                rating=rec_data['qual'],
+                prediction=rec_data['predclass'],
+                ## Loop through tasks and split them, keeping the ones where
+                ## task is set to 'yes', but translate them into the new
+                ## keywords, then join as a comma-separated list.
+                tasks=','.join([task_translations[task] for (task, verdict) in \
+                          (w.split(':') for w in rec_data['work']) \
+                          if verdict == 'yes'])
+            )
+            
+        ## Finish off with some closing brackets
+        invoke_text += '}}'
+        return invoke_text
+            
     def createRecsPage(self, recs, recTemplate=None, userGroup=None):
         """
         @param recs Recommendations for this user in the right order needed
@@ -412,11 +506,11 @@ class SuggestBot:
                 if i == len(parsedCode.nodes):
                     recMsgEndIdx = i;
 
-            # Now the new page source is the content of parsedtext.nodes[:firstindex]
-            # + new content + the content of parsedtext.nodes[lastindex:]
-            newPageSource = "{beforeMsg}{recMsg}\n\n{afterMsg}".format(beforeMsg="".join([unicode(node) for node in parsedCode.nodes[:recMsgStartIdx]]),
-                                                                    recMsg=recMsg,
-                                                                    afterMsg="".join([unicode(node) for node in parsedCode.nodes[recMsgEndIdx:]]));
+                # Now the new page source is the content of parsedtext.nodes[:firstindex]
+                # + new content + the content of parsedtext.nodes[lastindex:]
+                newPageSource = "{beforeMsg}{recMsg}\n\n{afterMsg}".format(beforeMsg="".join([unicode(node) for node in parsedCode.nodes[:recMsgStartIdx]]),
+                                                                           recMsg=recMsg,
+                                                                           afterMsg="".join([unicode(node) for node in parsedCode.nodes[recMsgEndIdx:]]));
 
         return newPageSource;
 

@@ -753,6 +753,27 @@ wikiproject_ignores = []
 ## Number of days between updates of WikiProject suggestions
 wikiproject_delay = 7
 
+## Title of the SuggestBot Module page that handles WikiProject suggestions
+wikiproject_module = 'User:SuggestBot/WikiProjects'
+
+## Name of the method to invoke to process WikiProject suggestions
+wikiproject_method = 'suggestions'
+
+## Category name prefixes for WikiProjects to allow gathering of articles.
+wikiproject_qual_prefixes = [
+    'FA-Class',
+    'A-Class',
+    'GA-Class',
+    'B-Class',
+    'C-Class',
+    'Start-Class',
+    'Stub-Class',
+    'Unassessed',
+    ]
+
+## Number of articles to use as basis for suggestions
+wikiproject_articles = 128
+
 # Placeholder text added when a page would otherwise be empty,
 # used to make sure our edits actually get saved
 empty_placeholder = {
