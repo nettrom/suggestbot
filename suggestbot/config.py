@@ -927,7 +927,7 @@ task_p_yes = 0.1
 tesk_p_maybe = 0.15
 
 # Maps our five dimensions to human-comprehensible task names
-humantasks = {
+human_tasks = {
     'length': 'content',
     'lengthToRefs': 'sources',
     'headings': 'headings',

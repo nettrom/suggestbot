@@ -215,14 +215,6 @@ class SuggestBot:
         :type add_include_clause: bool
         '''
 
-        ## Mapping of old task names to new task names (used in the Lua module)
-        task_translations = {
-            'headings': 'headings',
-            'length': 'content',
-            'completeness': 'links',
-            'lengthToRefs': 'sources',
-            'numImages': 'images'}
-
         for rec_title, rec_data in recs.items():
             ## Lowercase category and strip away numbers
             rec_data['cat'] = rec_data['cat'].lower()
@@ -270,7 +262,7 @@ class SuggestBot:
                 ## Loop through tasks and split them, keeping the ones where
                 ## task is set to 'yes', but translate them into the new
                 ## keywords, then join as a comma-separated list.
-                tasks=','.join([task_translations[task] for (task, verdict) in \
+                tasks=','.join([config.human_tasks[task] for (task, verdict) in \
                           (w.split(':') for w in rec_data['work']) \
                           if verdict == 'yes'])
             )
