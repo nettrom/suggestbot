@@ -177,6 +177,9 @@ class WikiProjectHandler(RequestTemplateHandler):
         if not self.db.connect():
             logging.error('unable to connect to SuggestBot database, exiting')
             return False
+
+        ## Log in to Wikipedia, as otherwise we're not identifying as ourselves
+        self.site.login()
         
         wproj_reqs = {} # maps project name to project request object
         wproj_queue = [] # project's we'll post suggestions to
@@ -244,7 +247,6 @@ class WikiProjectHandler(RequestTemplateHandler):
         for project in wproj_reqs.values():
             ## Default is to process this project
             wproj_queue.append(project)
-
             ## Check the edit history, assuming that if we've edited,
             ## we've done so in the past 50 edits...
             try:
@@ -290,7 +292,7 @@ class WikiProjectHandler(RequestTemplateHandler):
 
         ## For each project in the queue, create the Request object,
         ## update the database, get suggestions, complete the request
-        for project in wproj_queue[:1]:
+        for project in wproj_queue:
             logging.info('Suggesting articles to {0}'.format(project.name))
             rec_req = request.Request(lang=self.lang,
                                       username=project.name,
