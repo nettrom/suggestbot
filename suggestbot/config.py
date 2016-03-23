@@ -1033,3 +1033,7 @@ links_hostport = 10006
 # to base our recommendations on?
 # FIXME: this should be called NEDITS instead!
 nrecs = 500
+
+## API endpoint URLs for access to page views and article quality predictions
+pageview_url = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
+ORES_url = "http://ores.wmflabs.org/v2/scores/"
