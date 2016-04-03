@@ -1037,3 +1037,13 @@ nrecs = 500
 ## API endpoint URLs for access to page views and article quality predictions
 pageview_url = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
 ORES_url = "http://ores.wmflabs.org/v2/scores/"
+
+## Possible assessment ratings used by Wikipedians, all lowercase, and in
+## ascending order of quality.
+wp_ratings = {
+    'en': ['stub', 'start', 'c', 'b', 'b+', 'ga', 'a', 'fa'],
+    }
+
+## Number of attempts to make when sending API requests or database queries
+max_url_attempts = 3
+max_sql_attempts = 3
