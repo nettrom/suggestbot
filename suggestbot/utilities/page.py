@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8  -*-
 '''
-SuggestBot Recommender Libraries
+Wikipedia page object with properties reflecting an article's
+current assessment rating, it's predicted assessment rating,
+and the average number of views over the past 14 days.  The
+assessment rating is calculated per Warncke-Wang et al. (CSCW
+2015) from the article's talk page assessments.  Predicted rating
+is calculated by the Objective Revision Evaluation Service.  Page
+views are grabbed from the Wikimedia Pageview API.
 
-Copyright (C) 2005-2015 SuggestBot Dev Group
+Copyright (C) 2005-2016 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -30,10 +36,15 @@ Boston, MA  02110-1301, USA.
 ## 4: specific suggestions for article improvement
 
 import logging
-import pywikibot
+
 import requests
 
 import mwparserfromhell as mwp
+
+import pywikibot
+from pywikibot.pagegenerators import PreloadingGenerator
+from pywikibot.tools import itergroup
+from pywikibot.data import api
 
 from time import sleep
 from datetime import date, timedelta
@@ -268,3 +279,156 @@ class Page(pywikibot.Page):
             self._prediction = self._get_ores_pred()
             
         return(self._prediction)
+
+def TalkPageGenerator(pages):
+    '''
+    Generate talk pages from a list of pages.
+    '''
+    for page in pages:
+        yield page.toggleTalkPage()
+    
+def RatingGenerator(pages, step=50):
+    '''
+    Generate pages with assessment ratings.
+    '''
+
+    # preload talk page contents in bulk to speed up processing
+    tp_gen = PreloadingGenerator(TalkPageGenerator(pages), step=step)
+
+    # iterate and set the rating
+    for page, talkpage in zip(pages, tp_gen):
+        try:
+            page._rating = page.get_assessment(talkpage.get())
+        except pywikibot.NoPage:
+            page._rating = 'na'
+        except pywikibot.IsRedirectPage:
+            page._rating = 'na'
+        yield page
+
+def PageRevIdGenerator(site, pagelist, step=50):
+    """
+    Generate page objects with their most recent revision ID.
+    
+    This generator is a modified version of `preloadpages` in pywikibot.site.
+
+    :param site: site we're requesting page IDs from
+    :param pagelist: an iterable that returns Page objects
+    :param step: how many Pages to query at a time
+    :type step: int
+    """
+    for sublist in itergroup(pagelist, step):
+        pageids = [str(p._pageid) for p in sublist
+                   if hasattr(p, "_pageid") and p._pageid > 0]
+        cache = dict((p.title(withSection=False), p) for p in sublist)
+        props = "revisions|info|categoryinfo"
+        rvgen = api.PropertyGenerator(props, site=site)
+        rvgen.set_maximum_items(-1)  # suppress use of "rvlimit" parameter
+        if len(pageids) == len(sublist):
+            # only use pageids if all pages have them
+            rvgen.request["pageids"] = "|".join(pageids)
+        else:
+            rvgen.request["titles"] = "|".join(list(cache.keys()))
+        rvgen.request[u"rvprop"] = u"ids|flags|timestamp|user|comment"
+        
+        logging.info(u"Retrieving {n} pages from {s}.".format(n=len(cache),
+                                                              s=site))
+        for pagedata in rvgen:
+            logging.debug(u"Preloading {0}".format(pagedata))
+            try:
+                if pagedata['title'] not in cache:
+#                   API always returns a "normalized" title which is
+#                   usually the same as the canonical form returned by
+#                   page.title(), but sometimes not (e.g.,
+#                   gender-specific localizations of "User" namespace).
+#                   This checks to see if there is a normalized title in
+#                   the response that corresponds to the canonical form
+#                   used in the query.
+                    for key in cache:
+                        if site.sametitle(key, pagedata['title']):
+                            cache[pagedata['title']] = cache[key]
+                            break
+                    else:
+                        logging.warning(
+                            u"preloadpages: Query returned unexpected title"
+                            u"'%s'" % pagedata['title'])
+                        continue
+            except KeyError:
+                logging.debug(u"No 'title' in %s" % pagedata)
+                logging.debug(u"pageids=%s" % pageids)
+                logging.debug(u"titles=%s" % list(cache.keys()))
+                continue
+            page = cache[pagedata['title']]
+            api.update_page(page, pagedata)
+
+        # Since we're not loading content and the pages are already in
+        # memory, let's yield the pages in the same order as they were
+        # received in case that's important.
+        for page in sublist:
+            yield page
+        
+def PredictionGenerator(site, pages, step=50):
+    '''
+    Generate pages with quality predictions.
+
+    :param site: site of the pages we are predicting for
+    :type pages: pywikibot.Site
+
+    :param pages: List of pages we are predicting.
+    :type pages: list of pywikibot.Page
+
+    :param step: Number of pages to get predictions for at a time,
+                 maximum is 50.
+    :type step: int
+    '''
+
+    # looks like the best way to do this is to first make one
+    # API request to update the pages with the current revision ID,
+    # then make one ORES request to get the predictions.
+
+    if step > 50:
+        step = 50
+
+    langcode = '{lang}wiki'.format(lang=site.lang)
+        
+    # example ORES URL predicting ratings for multiple revisions:
+    # https://ores.wmflabs.org/v2/scores/enwiki/wp10/?revids=703654757%7C714153013%7C713916222%7C691301429%7C704638887%7C619467163
+    # sub "%7C" with "|"
+
+    # pywikibot.tools.itergroup splits up the list of pages
+    for page_group in itergroup(pages, step):
+        revid_page_map = {} # rev id (str) -> page object
+        # we use the generator to efficiently load most recent rev id
+        for page in PageRevIdGenerator(site, page_group):
+            revid_page_map[str(page.latestRevision())] = page
+
+        # make a request to score the revisions
+        url = '{ores_url}{langcode}/wp10/?revids={revids}'.format(
+            ores_url=config.ORES_url,
+            langcode=langcode,
+            revids='|'.join([str(page.latestRevision()) for page in page_group]))
+
+        logging.info('Requesting predictions for {n} pages from ORES'.format(
+            n=len(revid_page_map)))
+
+        num_attempts = 0
+        while num_attempts < config.max_url_attempts:
+            r = requests.get(url)
+            num_attempts += 1
+            if r.status_code == 200:
+                try:
+                    response = r.json()
+                    revid_pred_map = response['scores'][langcode]['wp10']['scores']
+                    # iterate over returned predictions and update
+                    for revid, score_data in revid_pred_map.items():
+                        revid_page_map[revid].set_prediction(score_data['prediction'].lower())
+                    break
+                except ValueError:
+                    logging.warning("Unable to decode ORES response as JSON")
+                except KeyErrror:
+                    logging.warning("ORES response keys not as expected")
+
+            # something didn't go right, let's wait and try again
+            sleep(500)
+
+        for page in page_group:
+            yield page
