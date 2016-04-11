@@ -99,7 +99,7 @@ class Page(pywikibot.Page):
         # https://wikitech.wikimedia.org/wiki/Analytics/PageviewAPI#Updates_and_backfilling
 
         today = date.today()
-        start_date = today - timedelta(days=16)
+        start_date = today - timedelta(days=15)
         end_date = today - timedelta(days=2)
 
         # test url for Barack Obama
