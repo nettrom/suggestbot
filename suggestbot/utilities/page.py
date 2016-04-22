@@ -46,11 +46,15 @@ from pywikibot.pagegenerators import PreloadingGenerator
 from pywikibot.tools import itergroup
 from pywikibot.data import api
 
+from math import log
 from time import sleep
 from datetime import date, timedelta
 from urllib.parse import quote
 
+from scipy import stats
+
 from suggestbot import config
+import suggestbot.utilities.qualmetrics as qm
 
 class InvalidRating(Exception):
     '''The given rating is not one we support.'''
@@ -64,13 +68,16 @@ class Page(pywikibot.Page):
         self._rating = None # current assessment rating
         self._prediction = None # predicted rating by ORES
 
-        self._wp10_scale = {'stub': 0,
-                            'start': 1,
-                            'c': 2,
-                            'b': 3,
-                            'ga': 4,
-                            'a': 5,
-                            'fa': 6}
+        # FIXME: switch to using the one from config
+        self._wp10_scale = {r: i for i, r
+                            in enumerate(config.wp_ratings[site.lang])}
+        self._qualdata = {}
+        self._qualtasks = {}
+
+        self._headers =  {
+            'User-Agent': config.http_user_agent,
+            'From': config.http_from
+        }
 
     def set_views(self, views):
         '''
@@ -81,10 +88,13 @@ class Page(pywikibot.Page):
         '''
         self._avg_views = views
 
-    def _get_views_from_api(self):
+    def _get_views_from_api(self, http_session=None):
         '''
         Make a request to the Wikipedia pageview API to retrieve page views
         for the past 14 days and calculate and set `_avg_views` accordingly.
+
+        :param http_session: Session to use for HTTP requests
+        :type http_session: requests.session
         '''
         # make a URL request to config.pageview_url with the following
         # information appendend:
@@ -98,6 +108,9 @@ class Page(pywikibot.Page):
         # no guarantee that the API has two weeks of data, though.
         # https://wikitech.wikimedia.org/wiki/Analytics/PageviewAPI#Updates_and_backfilling
 
+        if not http_session:
+            http_session = requests.Session()
+        
         today = date.today()
         start_date = today - timedelta(days=15)
         end_date = today - timedelta(days=2)
@@ -110,7 +123,7 @@ class Page(pywikibot.Page):
         view_list = []
         num_attempts = 0
         while not view_list and num_attempts < config.max_url_attempts:
-            r = requests.get(url)
+            r = http_session.get(url, headers=self._headers)
             num_attempts += 1
             if r.status_code == 200:
                 try:
@@ -140,15 +153,18 @@ class Page(pywikibot.Page):
                 
         return()
         
-    def get_views(self):
+    def get_views(self, http_session=None):
         '''
         Retrieve the average number of views for the past 14 days
         for this specific page.
 
+        :param http_session: Session to use for HTTP requests
+        :type http_session: requests.Session
+
         :returns: This page's number of average views
         '''
         if self._avg_views is None:
-            self._get_views_from_api()
+            self._get_views_from_api(http_session=http_session)
 
         return(self._avg_views)
 
@@ -254,7 +270,7 @@ class Page(pywikibot.Page):
         rating = None
         num_attempts = 0
         while not rating and num_attempts < config.max_url_attempts:
-            r = requests.get(url)
+            r = requests.get(url, headers=self._headers)
             num_attempts += 1
             if r.status_code == 200:
                 try:
@@ -279,6 +295,61 @@ class Page(pywikibot.Page):
             self._prediction = self._get_ores_pred()
             
         return(self._prediction)
+
+    def _get_qualmetrics(self):
+        '''
+        Populate quality metrics used for task suggestions.
+        '''
+        
+        qualfeatures = qm.get_qualfeatures(self.get())
+        # 1: length
+        self._qualdata['length'] = log(qualfeatures.length, 2)
+        # 2: lengthToRefs
+        self._qualdata['lengthToRefs'] = qualfeatures.length \
+                                     /(1 + qualfeatures.num_references)
+
+        # 3: completeness
+        self._qualdata['completeness'] = 0.4 * qualfeatures.num_pagelinks
+        
+        # 4: numImages
+        self._qualdata['numImages'] = qualfeatures.num_imagelinks
+        # 5: headings
+        self._qualdata['headings'] = qualfeatures.num_headings_lvl2 \
+                                     + 0.5 * qualfeatures.num_headings_lvl3
+
+        return()
+    
+    def get_suggestions(self):
+        '''
+        Decide whether this article is in need of specific improvements,
+        and if so, suggest those.
+        '''
+
+        # I need page data for:
+        if not self._qualdata:
+            self._get_qualmetrics()
+
+        for (key, keyDistr) in config.task_dist.items():
+            if not key in self._qualdata:
+                logging.warning("Warning: suggestion key {0} not found in page data for {1}".format(key, self.title()))
+                continue
+
+            if key == u"lengthToRefs":
+                pVal = 1 - keyDistr.cdf(self._qualdata[key])
+            else:
+                # calculate P-value from CDF
+                pVal = keyDistr.cdf(self._qualdata[key])
+
+            logging.debug("pVal for {task} is {p:.5f}".format(task=key,
+                                                              p=pVal))
+            verdict = 'no'
+            if pVal < config.task_p_yes:
+                verdict = 'yes'
+            elif pVal < config.task_p_maybe:
+                verdict = 'maybe'
+            self._qualtasks[key] = verdict
+
+        return(self._qualtasks)
 
 def TalkPageGenerator(pages):
     '''
@@ -330,7 +401,7 @@ def PageRevIdGenerator(site, pagelist, step=50):
             rvgen.request["titles"] = "|".join(list(cache.keys()))
         rvgen.request[u"rvprop"] = u"ids|flags|timestamp|user|comment"
         
-        logging.info(u"Retrieving {n} pages from {s}.".format(n=len(cache),
+        logging.debug(u"Retrieving {n} pages from {s}.".format(n=len(cache),
                                                               s=site))
         for pagedata in rvgen:
             logging.debug(u"Preloading {0}".format(pagedata))
@@ -407,12 +478,14 @@ def PredictionGenerator(site, pages, step=50):
             langcode=langcode,
             revids='|'.join([str(page.latestRevision()) for page in page_group]))
 
-        logging.info('Requesting predictions for {n} pages from ORES'.format(
+        logging.debug('Requesting predictions for {n} pages from ORES'.format(
             n=len(revid_page_map)))
 
         num_attempts = 0
         while num_attempts < config.max_url_attempts:
-            r = requests.get(url)
+            r = requests.get(url,
+                             headers={'User-Agent': config.http_user_agent,
+                                      'From': config.http_from})
             num_attempts += 1
             if r.status_code == 200:
                 try:

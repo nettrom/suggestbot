@@ -505,10 +505,18 @@ retired_days = 60
 # The number of seconds between checks for new suggestion requests
 suggest_req_poll = 300
 
+# How many recommendation iterations we store previous recs for
+# to prevent recommending the same article too often.
+rec_age_limit = 4
+
 # Tables for storing information about requests
 req_logtable = "request_log"
 req_seedstable = "request_seeds"
 req_recstable = "request_recs"
+
+# Filenames for our log files
+recs_log_filename = '../logs/get-recs-log.txt'
+ext_log_filename = '../logs/extended-recs-log.txt'
 
 # The number of seconds we wait between retrieving recent changes
 rc_delay = 3600
@@ -924,7 +932,7 @@ list_re = {
 # P-value cutoffs for determining if an article-specific task suggestion
 # is a "yes" or a "maybe"
 task_p_yes = 0.1
-tesk_p_maybe = 0.15
+task_p_maybe = 0.15
 
 # Maps our five dimensions to human-comprehensible task names
 human_tasks = {
@@ -1036,7 +1044,11 @@ nrecs = 500
 
 ## API endpoint URLs for access to page views and article quality predictions
 pageview_url = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
-ORES_url = "http://ores.wmflabs.org/v2/scores/"
+ORES_url = "https://ores.wmflabs.org/v2/scores/"
+
+## User-Agent used in HTTP requests
+http_user_agent = 'SuggestBot/1.0'
+http_from = 'morten@cs.umn.edu'
 
 ## Possible assessment ratings used by Wikipedians, all lowercase, and in
 ## ascending order of quality.
@@ -1047,3 +1059,20 @@ wp_ratings = {
 ## Number of attempts to make when sending API requests or database queries
 max_url_attempts = 3
 max_sql_attempts = 3
+
+## Distributions used for task recommendations
+## Note: This requires Python 3.4.3 (Anaconda) due to libraries
+from scipy.stats import norm
+from scipy.stats import gamma
+
+task_dist = {
+    'length': norm(loc=15.52829, scale=0.7703438),
+    'lengthToRefs': gamma(3.03767276, scale=0.05860149),
+    'completeness': gamma(2.6566952416, scale=37.02802),
+    'numImages': gamma(2.89982916, scale=4.561225),
+    'headings': gamma(6.6902927, scale=1.857648),
+}
+
+## Threshold for labelling an article's popularity as low, medium, or high
+pop_thresh_low = 2
+pop_thresh_med = 7
