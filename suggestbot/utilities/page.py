@@ -51,6 +51,10 @@ from time import sleep
 from datetime import date, timedelta
 from urllib.parse import quote
 
+from collections import namedtuple
+from mwtypes import Timestamp
+from wikiclass.extractors import enwiki
+
 from scipy import stats
 
 from suggestbot import config
@@ -68,7 +72,6 @@ class Page(pywikibot.Page):
         self._rating = None # current assessment rating
         self._prediction = None # predicted rating by ORES
 
-        # FIXME: switch to using the one from config
         self._wp10_scale = {r: i for i, r
                             in enumerate(config.wp_ratings[site.lang])}
         self._qualdata = {}
@@ -196,23 +199,35 @@ class Page(pywikibot.Page):
         rating = 'na'
         ratings = [] # numeric ratings
 
+        # Helper objects, the wikiclass extractor wants `mwxml.Page' objects
+        Revision = namedtuple("Revisions", ['id', 'timestamp', 'sha1', 'text'])
+        class MWXMLPage:
+            def __init__(self, title, namespace, revisions):
+                self.title = title
+                self.namespace = namespace
+                self.revisions = revisions
+                
+            def __iter__(self):
+                return iter(self.revisions)
+        
         # NOTE: The assessments are at the top of the page,
         # and the templates are rather small,
         # so if the page is > 8k, truncate.
         if len(wikitext) > 8*1024:
             wikitext = wikitext[:8*1024]
-        
-        parsed_text = mwp.parse(wikitext)
-        templates = parsed_text.filter_templates()
-        for template in templates:
-            try:
-                label = str(template.get('class').value.strip().lower())
-                ratings.append(self._wp10_scale[label])
-            except ValueError:
-                pass # no class rating in the template
-            except KeyError:
-                pass # rating invalid
 
+        # Extract rating observations from a dummy `mwxml.Page` object
+        # where the only revision is our wikitext
+        observations = enwiki.extract(MWXMLPage(self.title(),
+                                                1,
+                                                [Revision(1, Timestamp(1),
+                                                          "aaa", wikitext)]))
+        for observation in observations:
+            try:
+                ratings.append(self._wp10_scale[observation['label']])
+            except KeyError:
+                pass # invalid rating
+                
         if ratings:
             # set rating to the highest rating, but the str, not ints
             rating = {v: k for k, v in self._wp10_scale.items()}[max(ratings)]

@@ -28,6 +28,8 @@ Boston, MA  02110-1301, USA.
 
 from __future__ import with_statement
 
+import os
+
 # Dictionary to translate a language code to a descriptive language name
 lang_codes={
     'en': 'english',
@@ -481,6 +483,9 @@ tasks = {
 # (num. images, num. wikilinks, num. broken wikilinks) for articles
 qualws_url = r'http://tools.wmflabs.org/suggestbot/quality_metadata'
 
+# URL to the Tool Labs webservice to get link-based recommendations
+linkrec_url = "http://tools.wmflabs.org/suggestbot/link_recommender"
+
 # Variables that control how we handle regulars, and store them
 # in the suggestbot database.
 
@@ -515,8 +520,10 @@ req_seedstable = "request_seeds"
 req_recstable = "request_recs"
 
 # Filenames for our log files
-recs_log_filename = '../logs/get-recs-log.txt'
-ext_log_filename = '../logs/extended-recs-log.txt'
+recs_log_filename = os.path.join(
+    os.environ['SUGGESTBOT_DIR'], 'logs/get-recs-log.txt')
+ext_log_filename = os.path.join(
+    os.environ['SUGGESTBOT_DIR'], 'logs/extended-recs-log.txt')
 
 # The number of seconds we wait between retrieving recent changes
 rc_delay = 3600
@@ -1037,10 +1044,21 @@ classifier_hostport = 10129
 links_hostname = "localhost"
 links_hostport = 10006
 
-# How many contributions do we maximally grab through the API
-# to base our recommendations on?
-# FIXME: this should be called NEDITS instead!
-nrecs = 500
+# How many contributions do grab from the API to base our recommendations on?
+nedits = 128
+
+## Number of articles to recommend per category, and request from a server
+nrecs_per_taskcat = 3
+nrecs_per_server = 2500
+
+## Do we filter minor and unimportant edits by default?
+filter_minor = True
+filter_unimportant = True
+
+## Coedit threshold (number of edits in common to be a neighbour)
+## and backoff (amount to decrement threshold if neighborhood is small)
+coedit_threshold = 3
+coedit_backoff = 1
 
 ## API endpoint URLs for access to page views and article quality predictions
 pageview_url = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
