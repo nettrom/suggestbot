@@ -37,9 +37,9 @@ import xmlrpc.client
 class RecommendationServer:
     def __init__(self):
         # Set up the database
-        self.db = SuggestBotDatabase()
-        self.dbConn = None
-        self.dbCursor = None
+        self.db = db.SuggestBotDatabase()
+        self.dbconn = None
+        self.dbcursor = None
 
     def is_unimportant_by_comment(self, comment_text, lang):
         '''
@@ -221,3 +221,130 @@ class RecommendationServer:
             logging.warning('Reached max attempts to contact Tool Labs HTTP server without success')
         return(recommendations)
     
+    def recommend(self, lang, username, rec_params):
+        '''
+        Collect a set of articles to recommend for the given user in the
+        specified language, with the supplied recommendation parameters.
+
+        :param lang: Language code of the Wikipedia we're recommending for
+        :param username: Name of the user we're recommending to.
+        :param params: Recommendation paramaters
+        :type params: dict
+        '''
+
+        # SQL query to add an entry to the seeds table
+        addseed_query = r"""INSERT INTO {seedtable}
+                            (id, title)
+                            VALUES (%s, %s)""".format(config.req_seedstable)
+
+        # Default result of a recommendation
+        rec_result = {'code': 200,
+                      'message': 'OK',
+                      'recs': {}}
+
+        print("Requested to recommend articles for {0}:User:{1}".format(
+            lang, user))
+        
+        if 'debug-headers' in rec_params and rec_params['debug-headers']:
+            print("For debugging purposes, the recommendation paramaters:")
+            for param, value in rec_params.items():
+                if param == 'articles':
+                    print('Got {n} articles to use as an interest profile:'.format(n=len(rec_params['articles'])))
+                    for article in value:
+                        print('* {0}'.format(article))
+                else:
+                    print('{0} = {1}'.format(param, value))
+            return(rec_result)
+        
+        # We need to keep track of all items, even if some are filtered
+        all_articles = {}
+        user_articles = {}
+
+        if 'articles' in rec_params:
+            # We were given a set of articles to use as a basis
+            all_articles = {k: 1 for k in rec_params['articles']}
+            user_articles = list(all_articles.keys())
+            if len(user_articles) > config.nedits:
+                user_articles = user_articles[:config.nedits]
+        else:
+            user_articles = self.get_edited_items(lang, username)
+
+        if not user_articles:
+            logging.warning('Found no articles to use as a basis for {0}:{1}'.format(lang, username))
+            return(rec_result)
+
+        # If this is a request and no seeds were supplied with the request,
+        # add the articles to the request's seed list.
+        if rec_params['request-type'] == 'single-request' \
+           and ('articles' not in rec_params \
+                or not rec_params['articles']):
+            logging.info('Adding {n} single-request articles to the seed list'.format(n=len(user_articles)))
+            if not self.db.connect():
+                logging.warning('Unable to connect to SuggestBot database')
+            else:
+                (self.dbconn, self.dbcursor) = self.db.getConnection()
+                try:
+                    self.dbcursor.executemany(
+                        addseed_query,
+                        [(rec_params['request-id'], title)
+                         for article in user_articles])
+                except MySQLdb.Error as e:
+                    logging.error('Failed to insert seedsinto the database')
+                    logging.error('{0} : {1}'.format(e[0], e[1]))
+                     
+                self.db.disconnect()
+                self.dbcursor = None
+                self.dbconn = None
+
+        # Recommendations form each of our rec servers
+        rec_lists = {}
+
+        logging.info('Getting recommendations from the co-edit recommender')
+        rec_lists['coedits'] = self.get_coedit_recs(lang, username,
+                                                    user_articles)
+        if rec_lists['coedits']:
+            logging.info('Successfully retrieved co-edit recommendations')
+
+        logging.info('Getting recommendations from the link recommender')
+        rec_lists['links'] = self.get_link_recs(lang, username,
+                                                  user_articles)
+        if rec_lists['links']:
+            logging.info('Successfully retrieved link-based recommendations')
+        
+        logging.info('Getting recommendations from the text recommender')
+        rec_lists['textmatch'] = self.get_textmatch_recs(lang, username,
+                                                         user_articles)
+        if rec_lists['textmatch']:
+            logging.info('Successfully retrieved text-based recommendations')
+
+        # Prepare the parameters for the filter server
+        filter_server_params = {
+            'categories' : rec_params['categories'],
+            'nrecs-per-server' : rec_params['nrecs_per_server'],
+            'request-type' : rec_params['request-type'],
+            'nrecs' : rec_params['nrecs']
+            }
+
+        filtered_recs = []
+        with xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
+                hostname=config.filter_server_hostname,
+                port=config.filter_server_hostport)) as sp:
+            try:
+                logging.info('Filtering recommendations')
+                filter_recs = sp.getrecs(username,
+                                         lang,
+                                         rec_lists,
+                                         all_articles,
+                                         filter_server_params)
+                logging.info('Successfully filtered recommendations')
+            except xmlrpc.client.Error as e:
+                logging.error("Failed to filter recommendations for {0}:User:{1}".format(lang, user))
+                logging.error(e)
+                return(rec_result)
+
+        rec_result['recs'] = filtered_recs
+
+        print("Completed recommendations for {0}:User:{1}".format(lang, user))
+
+        return(rec_result)
+
