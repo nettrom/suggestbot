@@ -3,7 +3,7 @@
 '''
 Library for retrieving a user's edits to use as their interest profile.
 
-Copyright (C) 2005-2013 SuggestBot Dev Group
+Copyright (C) 2005-2016 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -21,277 +21,246 @@ Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 Boston, MA  02110-1301, USA.
 '''
 
-from __future__ import with_statement
-
 __version__ = "$Id$"
 
 import re
-import os
-import sys
 import logging
 
 from datetime import datetime, timedelta
 
 import pywikibot
 
-## FIXME: PEP8 style changes
-## FIXME: configuration variables
-## FIXME: configuration library
-# from Config import SuggestBotConfig
-
-## FIXME: library fix, add reverts library
-import ..utils.reverts
+from suggestbot import config
+import suggestbot.utilities.reverts as sur
 
 class EditGetter:
-    def __init__(self, config=None):
+    def get_last_n(self, site, username, n=500):
+        '''
+        Grab the user's `n` most recent edits, build a set of the titles,
+        and return that as a list.
 
-        self.config = config
-        # if not config:
-        #     self.config = SuggestBotConfig()
+        :param site: Wikipedia site the user belongs to
+        :type site: pywikibot.Site
 
-    def getUserEdits(self, lang, wikiSite, username, startDate, endDate,
-                     filterMinor, filterReverts, edit_dict, recent_set):
-        n_contribs = 500
-        if wikiSite.has_right('apihighlimits'):
-            n_contribs = 5000
+        :param username: Username of the user we're fetching edits for
+        :param n: The number of edits to build the set from
+        '''
 
-        query = pywikibot.data.api.Request(site=wikiSite, action="query")
-        query['list'] = u"usercontribs"
+        query = pywikibot.data.api.Request(site=site, action="query")
+        query['list'] = "usercontribs"
         query['ucnamespace'] = 0
-        query['uclimit'] = n_contribs
-        query['ucstart'] = startDate.strftime('%Y%m%d%H%M%S')
-        query['ucend'] = endDate.strftime('%Y%m%d%H%M%S')
+        query['uclimit'] = n
         query['ucuser'] = username
-        if filterMinor:
+        query['continue'] = ''
+
+        try:
+            response = query.submit()
+            if 'continue' in response:
+                query['continue'] = response['continue']['continue']
+                query['uccontinue'] = response['continue']['uccontinue']
+            else:
+                done = True
+        except pywikibot.Error as e:
+            # Something reasonably serious happened, so return.
+            logging.warning('User contributions query failed')
+            logging.warning('{} : {}'.format(e[0], e[1]))
+            return([])
+
+        # Valid response? If not, return an empty list
+        if not 'query' in response \
+           or not 'usercontribs' in response['query']:
+            logging.warning("Possible query response error for {}:{}, unable to continue".format(lang, username))
+            return([])
+          
+        edits = response['query']['usercontribs']
+        if not edits:
+            logging.info('{}:{} has no edits'.format(lang, username))
+            return([])
+
+        edited_titles = set()
+        for edit in edits:
+            try:
+                edited_titles.add(edit['title'])
+            except KeyError:
+                # edit info redacted
+                continue
+
+        return(list(edited_titles))
+    
+    def get_edits(self, lang, username, multiplier=0.98,
+                  min_articles=64,
+                  filter_minor=True, filter_reverts=True):
+        """
+        Build an interest profile for the given user, try to return a
+        minimum of `min_articles`.
+
+        :param lang: Language code of the Wikipedia this user belongs to
+        :type lang: str
+
+        :param username: Username of the user we're fetching edits for
+        :type username: str
+
+        :param min_articles: The minimum number of articles we seek to return
+        :type min_articles: int
+        
+        :param filter_minor: filter out minor edits?
+        :type filter_minor: bool
+
+        :param filter_reverts: filter out reverts?
+        :type filter_reverts: bool
+        """
+        # Proposed new algorithm:
+        # Incrementally walk backwards in the user's edit history
+        # until we have data on k articles, counting up the edits.
+        # An edit is scored as 0.98^n where n is the number of days
+        # back since the most recent user edit (this prevents a user's
+        # profile from being altered just by time passing).  We choose
+        # 0.98 because it means an edit 35 days out counts 0.5.
+        # We gather edits until we have k articles, or exhausted our
+        # search.
+
+        # Note: The old algorithm would iterate through the user's
+        # last 500 edits and store _everything_, but only use a random
+        # sample of those articles for recommendations The rest would
+        # be stored, however, so we'll have to return two things:
+        # 1: the interest profile.
+        # 2: a list of all relevant articles to be used for filtering.
+        
+        # We return a dictionary mapping titles to interest scores.
+
+        logging.info("Building profile {lang}:{username}".format(lang=lang, username=username))
+        
+        site = pywikibot.Site(lang)
+
+        # Default profile
+        profile = {'interests' : {},
+                   'all_edits' : self.get_last_n(site, username)}
+       
+        # Start building the query
+        query = pywikibot.data.api.Request(site=site, action="query")
+        query['list'] = "usercontribs"
+        query['ucnamespace'] = 0
+        query['ucuser'] = username
+        query['continue'] = ''
+
+        # By default we'll get 500 edits a time, for a max of 10 times
+        query['uclimit'] = 500
+        n_tries = 10
+        
+        if site.has_right('apihighlimits'):
+            # I'm a bot, so I'll get 5,000 in one go and be done with it
+            query['uclimit'] = 5000
+            n_tries = 1
+
+        if filter_minor:
             query['ucshow'] = '!minor'
 
-        attempts = 0
-        max_attempts = 3
         done = False
-        while attempts < max_attempts and not done:
+        attempts = 0
+        first_date = None
+        last_title = ''
+        while not done and attempts < n_tries:
+            # Submit the query to the API. If the query continues,
+            # update the query parameters, otherwise we're done.
+            logging.info('Making attempt {}'.format(attempts))
             try:
                 response = query.submit()
-                if 'query-continue' in response:
-                    query['ucstart'] = response['query-continue']['usercontribs']['ucstart']
+                if 'continue' in response:
+                    query['continue'] = response['continue']['continue']
+                    query['uccontinue'] = response['continue']['uccontinue']
                 else:
                     done = True
-            except:
-                attempts += 1
+            except pywikibot.Error as e:
+                # Something reasonably serious happened, so return.
+                logging.warning('User contributions query failed')
+                logging.warning('{} : {}'.format(e[0], e[1]))
+                return(profile)
 
-        if not 'query' in response \
-                        or not 'usercontribs' in response['query']:
-                logging.warning(u"Possible query response error for {lang}:{username}, unable to continue".format(lang=lang, username=username))
-                return
+            # Valid response? If not, return whatever we have.
+            if not 'query' in response \
+               or not 'usercontribs' in response['query']:
+                logging.warning("Possible query response error for {}:{}, unable to continue".format(lang, username))
+                return(profile)
+          
+            edits = response['query']['usercontribs']
+            if not edits:
+                logging.info('{}:{} has no edits'.format(lang, username))
+                return(profile)
 
-        edits = response['query']['usercontribs']
+            logging.info('Processing {} edits'.format(len(edits)))
+            
+            # OK, we have some data, call this a valid attempt...
+            attempts += 1
 
-        if filterReverts == True:
-            edits[:] = [edit for edit in edits \
-                            if re.match(Reverts.REVERT_RE[lang],
-                                        edit[u'comment']) == None]
-            #Checks for english specific revert tags
-            if lang == u'en':
-                edits[:] = [edit for edit in edits \
-                                if re.match(Reverts.VLOOSE_RE,
-                                            edit[u'comment']) == None \
-                                and re.match(Reverts.VSTRICT_RE,
-                                             edit[u'comment']) == None]
-
-        # adds to edit dictionary, based on number of edits made on an article,
-        # and adds title to recent article set
-        for edit in edits:
-            title = edit[u'title']
-            recent_set.add(title)
-            edit_dict[title] = edit_dict.get(title,
-                                             {u'numEdits': 0,
-                                              u'firstedit': edit[u'timestamp']})
-            edit_dict[title][u'numEdits'] += 1
-    
-    def getEdits(self, freq=7, lang=None,  username=None,
-                 history_multiplier = 4, num_retries = 4,
-                 min_articles=64, min_avg_edits = 1.05,
-                 filterMinor=True, filterReverts=True):
-        """
-        Build an interest profile for the given user, return nItems.
-
-        @param lang: Language code of the Wikipedia this user belongs to
-        @type lang: unicode
-
-        @param username: Username of the user we're fetching edits for
-        @type username: unicode
-
-        @param nItems: number of items to return
-        @type nItems: int
-
-        @param date: Date from which to start iterating edits, format YYYYMMDDHHMMSS.
-                     Default is to fetch edits from the current time.
-        @type date: str
-
-        @param filterMinor: filter out minor edits?
-        @type filterMinor: bool
-
-        @param filterReverts: filter out reverts?
-        @type filterReverts: bool
-        """
-        edits = []
-
-        if not lang \
-                or not username:
-            logging.error("getEdits called without lang code or username, unable to continue")
-            return edits
-
-        logging.info(u"Getting edits for {lang}:{username}".format(lang=lang, username=username))
-
-        wikiSite = pywikibot.getSite(lang)
-        wikiSite.login()
-
-        # sets initial time conditions for first article retrieval
-        now = datetime.utcnow()
-        startTime = now
-        endTime = now - timedelta(days = freq * history_multiplier)
-
-        edit_dict = {}
-        all_recent_edits = set()
-        avg_edits = 0
-        profile = {}
-        
-        self.getUserEdits(lang, wikiSite, username, startTime, endTime, filterMinor, filterReverts, edit_dict, all_recent_edits)
-        if not edit_dict:
-             logging.warning(u"{username} had no recent edits for {lang}".format(lang = lang, username=username))
-             profile['edit profile'], profile['all recent edits'] = self.getOldEdits(lang, username, 128, filterMinor, filterReverts)
-             return profile   
-        for title in edit_dict:
-                avg_edits += edit_dict[title][u'numEdits']
-                avg_edits = avg_edits / len(edit_dict)
-           
-        retries = 0
-        #keeps adding articles to profile until ideal conditions met or retry limit is met
-        while len(edit_dict) < min_articles and avg_edits < min_avg_edits:   
-                startTime = endTime
-                endTime = startTime \
-                    - timedelta(days = freq * history_multiplier / 2)
-                prev_num_articles = len(edit_dict)    
-                self.getUserEdits(lang, wikiSite, username, startTime, endTime, filterMinor, filterReverts, edit_dict, all_recent_edits)
-                retries +=1
-
-                prev_avg_edits = avg_edits                
-                avg_edits = 0
-                for title in edit_dict:
-                        avg_edits += edit_dict[title][u'numEdits']
-                avg_edits = avg_edits / len(edit_dict)
+            for edit in edits:
+                try:
+                    title = edit['title']
+                    timestamp = datetime.strptime(edit['timestamp'],
+                                                  '%Y-%m-%dT%H:%M:%SZ')
+                    comment = edit['comment']
+                except KeyError:
+                    # edit info redacted
+                    continue
                 
-                if avg_edits <= prev_avg_edits and len(edit_dict) == prev_num_articles:
-                        break
-                
-                if retries >= num_retries:
-                        break
-        
-        sorted_list = sorted(edit_dict.items(), key=lambda x: x[1][u'firstedit'], reverse = True)
-        edits = [(title, val[u'numEdits']) for (title, val) in sorted_list]
+                # skip if a revert
+                if filter_reverts and self.is_revert(lang, comment):
+                    logging.info('"{}" identified as revert'.format(comment))
+                    continue
+                                 
+                if not first_date:
+                    first_date = timestamp
+                    profile[title] = 1
+                else:
+                    # Note: first_date is the most recent edit, so we
+                    # subtract the edit's older timestamp to get the diff
+                    diff = first_date - timestamp
+                    profile['interests'][title] = profile.get(title, 0) + \
+                                                  multiplier**diff.days
 
-        #adds the rest of the edits to all_recent_edits, without worrying about adding them to the edit profile itself
-        startTime = endTime
-        endTime = now - timedelta(days = freq*history_multiplier * 12)
-        self.getUserEdits(lang, wikiSite, username, startTime, endTime, filterMinor, filterReverts, edit_dict, all_recent_edits)        
-
-        #stores data into dictionary to return
-        profile['edit profile'] = edits
-        profile['all recent edits'] = all_recent_edits                 
+                logging.info('Profile now contains {} articles'.format(len(profile['interests'])))
+                                 
+                if not last_title:
+                    last_title = title
+                elif len(profile['interests']) == min_articles \
+                     and last_title != title:
+                    done = True
 
         # Returns user profile
         return profile
 
-    def stopme(self):
-        pywikibot.stopme()
+    def is_revert(self, lang, edit_comment):
+        '''
+        Determine if the edit comment is a revert based on the given language.
+        
+        :param lang: Language we're checking
+        :param edit_comment: The (unparsed) edit comment
+        '''
 
-    def getOldEdits(self, lang=None, username=None, nItems=128, 
-                 filterMinor=True, filterReverts=True):
-        """
-        Build an interest profile for the given user, return nItems.
+        # Note: we use search, not match, and require anchoring
+        # in the regex as necessary.
 
-        @param lang: Language code of the Wikipedia this user belongs to
-        @type lang: unicode
+        if re.search(sur.REVERT_RE[lang], edit_comment):
+            return(True)
 
-        @param username: Username of the user we're fetching edits for
-        @type username: unicode
-
-        @param nItems: number of items to return
-        @type nItems: int
-
-        @param date: Date from which to start iterating edits, format YYYYMMDDHHMMSS.
-                     Default is to fetch edits from the current time.
-        @type date: str
-
-        @param filterMinor: filter out minor edits?
-        @type filterMinor: bool
-
-        @param filterReverts: filter out reverts?
-        @type filterReverts: bool
-        """
-        edits = []
-
-        if not lang \
-                or not username:
-            logging.error("getEdits called without lang code or username, unable to continue")
-            return edits
-
-        logging.info(u"Getting edits for {lang}:{username}".format(lang=lang, username=username))
-
-        wikiSite = pywikibot.getSite(lang)
-        wikiSite.login()
-
-        n_contribs = 500
-
-        query = pywikibot.data.api.Request(site=wikiSite, action="query")
-        query['list'] = u"usercontribs"
-        query['ucnamespace'] = 0
-        query['uclimit'] = n_contribs
-        query['ucuser'] = username
-
-        response = query.submit()
-
-        if not 'query' in response \
-                or not 'usercontribs' in response['query']:
-            logging.warning(u"Possible query response error for {lang}:{username}, unable to continue".format(lang=lang, username=username))
-            return edits
-
-        edits = response['query']['usercontribs']
-
-        if filterMinor == True:
-            edits[:] = [edit for edit in edits if 'minor' in edit]
-
-        if filterReverts == True:
-            edits[:] = [edit for edit in edits if re.match(Reverts.REVERT_RE[lang],edit[u'comment'])==None]
-            #Checks for english specific revert tags
-            if lang == u'en':
-                edits[:] = [edit for edit in edits if re.match(Reverts.VLOOSE_RE, edit[u'comment'])== None and re.match(Reverts.VSTRICT_RE, edit[u'comment'])==None]
-
-        #creates edit dictionary, based on number of edits made on an article
-        edit_dict = {}
-        all_edits_set = set()
-        for edit in edits:
-            title = edit[u'title']
-            all_edits_set.add(title)
-            if len(edit_dict) < nItems:
-                edit_dict[title] = edit_dict.get(title, {u'numEdits': 0, u'firstedit': edit[u'timestamp']})
-                edit_dict[title][u'numEdits'] += 1
-
-        sorted_list = sorted(edit_dict.items(), key=lambda x: x[1][u'firstedit'], reverse = True)
-        edits = [(title, val[u'numEdits']) for (title, val) in sorted_list]                   
-
-        # Return contribs list
-        return edits[:nItems], all_edits_set
-
+        if lang == 'en' and \
+           (re.search(sur.VLOOSE_RE, edit_comment) or \
+            re.search(sur.VSTRICT_RE, edit_comment)):
+            return(True)
+        
+        return(False)
+ 
 def main():
-    testLang = u'en'
-    testUser = u'Nettrom'
+    logging.basicConfig(level=logging.INFO)
+    
+    lang = u'en'
+    user = u'Nettrom'
     myGetter = EditGetter()
-    profile = myGetter.getEdits(lang=testLang, username = testUser)
-    print u'Got interest profile with {n} items for user {username}'.format(n=len(profile['edit profile']),username=testUser).encode('utf-8')
-    print profile['edit profile']
-    print profile['all recent edits']
-    print len(profile['edit profile'])
-    print len(profile['all recent edits'])
+    profile = myGetter.get_edits(lang, user)
+
+    print('Got interest profile with {n} items for user {username}'.format(n=len(profile['interests']),username=user))
+    print(profile['interests'])
+    print(profile['all_edits'])
+    print("No. of items in profile: {}, no. of most recent edited articles: {}".format(len(profile['interests']), len(profile['all_edits'])))
 
 if __name__ == '__main__':
-	main()
+    main()
