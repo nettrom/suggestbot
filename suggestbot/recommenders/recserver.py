@@ -23,6 +23,7 @@ Boston, MA  02110-1301, USA.
 '''
 
 import re
+import sys
 import logging
 
 from suggestbot import config, db
@@ -55,12 +56,12 @@ class RecommendationServer:
             return(False)
 
         if lang in sur.REVERT_RE \
-           and re.search(regex, sur.REVERT_RE[lang], re.I | re.X):
+           and re.search(sur.REVERT_RE[lang], comment_text, re.I | re.X):
             return(True)
 
         for regex in [sur.VLOOSE_RE, sur.VSTRICT_RE, sur.AWB, sur.HotCat,
                       sur.Twinkle, sur.curation, sur.misc]:
-            if re.search(regex, edit_comment, re.I | re.X):
+            if re.search(regex, comment_text, re.I | re.X):
                 return(True)
 
         # nope, no matches
@@ -75,24 +76,22 @@ class RecommendationServer:
         edits = []
         not_minor_edits = []
         reverts = {}
-        with xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
-                hostname=config.edit_server_hostname,
-                port=config.edit_server_hostport)) as sp:
-            try:
-                edits = sp.getedits(user,
-                                    lang,
-                                    config.nedits)
-            except xmlrpc.client.Error as e:
-                logging.error('Getting edits for {0}:User:{1} failed'.format(
-                    lang, user))
-                logging.error(e)
-                return((all_edits, edits))
+        sp = xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(hostname=config.edit_server_hostname, port=config.edit_server_hostport))
+        try:
+            raw_edits = sp.get_edits(user,
+                                     lang,
+                                     config.nedits)
+        except xmlrpc.client.Error as e:
+            logging.error('Getting edits for {0}:User:{1} failed'.format(
+                lang, user))
+            logging.error(e)
+            return((all_edits, edits))
 
-        for edit in edits:
+        for edit in raw_edits:
             edits.append(edit['title'])
             all_edits[edit['title']] = 1
             
-            if edit['minor']:
+            if not edit['minor']:
                 not_minor_edits.append(edit['title'])
 
             if config.filter_unimportant:
@@ -112,7 +111,6 @@ class RecommendationServer:
             if goodedits:
                 edits = goodedits
 
-        
         useful_edits = []
         items = set()
         for edit in edits:
@@ -137,20 +135,20 @@ class RecommendationServer:
         '''
 
         recommendations = []
-        with xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
-                hostname=config.coedit_hostname,
-                port=config.coedit_hostport)) as sp:
-            try:
-                recommendations = sp.getedits(user,
-                                              lang,
-                                              user_edits,
-                                              config.nrecs_per_server,
-                                              config.coedit_threshold,
-                                              config.coedit_backoff)
-            except xmlrpc.client.Error as e:
-                logging.error('Failed to get coedit recommendations for {0}:User:{1}'.format(
-                    lang, user))
-                logging.error(e)
+        sp = xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
+            hostname=config.coedit_hostname,
+            port=config.coedit_hostport))
+        try:
+            recommendations = sp.recommend(user,
+                                           lang,
+                                           user_edits,
+                                           config.nrecs_per_server,
+                                           config.coedit_threshold,
+                                           config.coedit_backoff)
+        except xmlrpc.client.Error as e:
+            logging.error('Failed to get coedit recommendations for {0}:User:{1}'.format(
+                lang, user))
+            logging.error(e)
 
         return(recommendations)
 
@@ -165,18 +163,18 @@ class RecommendationServer:
         '''
 
         recommendations = []
-        with xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
-                hostname=config.textmatch_hostname,
-                port=config.textmatch_hostport)) as sp:
-            try:
-                recommendations = sp.getedits(user,
-                                              lang,
-                                              user_edits,
-                                              config.nrecs_per_server)
-            except xmlrpc.client.Error as e:
-                logging.error('Failed to get coedit recommendations for {0}:User:{1}'.format(
-                    lang, user))
-                logging.error(e)
+        sp = xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
+            hostname=config.textmatch_hostname,
+            port=config.textmatch_hostport))
+        try:
+            recommendations = sp.getedits(user,
+                                          lang,
+                                          user_edits,
+                                          config.nrecs_per_server)
+        except xmlrpc.client.Error as e:
+            logging.error('Failed to get coedit recommendations for {0}:User:{1}'.format(
+                lang, user))
+            logging.error(e)
 
         return(recommendations)
 
@@ -200,7 +198,7 @@ class RecommendationServer:
                       'nrecs': config.nrecs_per_server}
         
         attempts = 0
-        while attemps < config.max_url_attempts:
+        while attempts < config.max_url_attempts:
             attempts += 1
             r = requests.post(config.linkrec_url,
                               data={'items': json.dumps(user_edits),
@@ -233,7 +231,7 @@ class RecommendationServer:
         '''
 
         # SQL query to add an entry to the seeds table
-        addseed_query = r"""INSERT INTO {seedtable}
+        addseed_query = r"""INSERT INTO {}
                             (id, title)
                             VALUES (%s, %s)""".format(config.req_seedstable)
 
@@ -242,8 +240,8 @@ class RecommendationServer:
                       'message': 'OK',
                       'recs': {}}
 
-        print("Requested to recommend articles for {0}:User:{1}".format(
-            lang, user))
+        sys.stderr.write("Requested to recommend articles for {0}:User:{1}\n".format(
+            lang, username))
         
         if 'debug-headers' in rec_params and rec_params['debug-headers']:
             print("For debugging purposes, the recommendation paramaters:")
@@ -260,7 +258,7 @@ class RecommendationServer:
         all_articles = {}
         user_articles = {}
 
-        if 'articles' in rec_params:
+        if 'articles' in rec_params and len(rec_params['articles']) > 0:
             # We were given a set of articles to use as a basis
             all_articles = {k: 1 for k in rec_params['articles']}
             user_articles = list(all_articles.keys())
@@ -326,25 +324,25 @@ class RecommendationServer:
             }
 
         filtered_recs = []
-        with xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
-                hostname=config.filter_server_hostname,
-                port=config.filter_server_hostport)) as sp:
-            try:
-                logging.info('Filtering recommendations')
-                filter_recs = sp.getrecs(username,
-                                         lang,
-                                         rec_lists,
-                                         all_articles,
-                                         filter_server_params)
-                logging.info('Successfully filtered recommendations')
-            except xmlrpc.client.Error as e:
-                logging.error("Failed to filter recommendations for {0}:User:{1}".format(lang, user))
-                logging.error(e)
-                return(rec_result)
+        sp = xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(
+            hostname=config.filter_server_hostname,
+            port=config.filter_server_hostport))
+        try:
+            logging.info('Filtering recommendations')
+            filter_recs = sp.getrecs(username,
+                                     lang,
+                                     rec_lists,
+                                     all_articles,
+                                     filter_server_params)
+            logging.info('Successfully filtered recommendations')
+        except xmlrpc.client.Error as e:
+            logging.error("Failed to filter recommendations for {0}:User:{1}".format(lang, username))
+            logging.error(e)
+            return(rec_result)
 
         rec_result['recs'] = filtered_recs
 
-        print("Completed recommendations for {0}:User:{1}".format(lang, user))
+        print("Completed recommendations for {0}:User:{1}".format(lang, username))
 
         return(rec_result)
 

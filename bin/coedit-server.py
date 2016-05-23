@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8  -*-
 """
-XML-RPC wrapper to instantiate the main recommendation server.
+XML-RPC wrapper to instantiate the co-edit recommendation server.
 
 Copyright (C) 2005-2016 SuggestBot Dev Group
 
@@ -24,7 +24,7 @@ Boston, MA  02110-1301, USA.
 import logging
 
 from suggestbot import config
-from suggestbot.recommenders import RecommendationServer
+from suggestbot.recommenders.coedit import Recommender
 
 from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
@@ -37,7 +37,7 @@ def main():
     # Parse CLI options
     import argparse
     cli_parser = argparse.ArgumentParser(
-        description="XML-RPC server for filtering recommendations."
+        description="XML-RPC server for co-edit based recommendations."
         )
 
     # Add verbosity option
@@ -46,16 +46,16 @@ def main():
     args = cli_parser.parse_args()
 
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.INFO)
 
-    recserver = RecommendationServer()
+    recserver = Recommender()
     server = SimpleXMLRPCServer(
-        (config.main_server_hostname, config.main_server_hostport),
+        (config.coedit_hostname, config.coedit_hostport),
         allow_none=True)
 
     server.register_introspection_functions()
     server.register_function(recserver.recommend, 'recommend')
-    print("Recommendation server is running...")
+    print("Co-edit rec server is running...")
 
     # Run the server's main loop
     server.serve_forever()

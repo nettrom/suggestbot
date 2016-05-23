@@ -33,7 +33,7 @@ import pywikibot
 from suggestbot import config
 import suggestbot.utilities.reverts as sur
 
-class EditGetter:
+class EditProfiler:
     def get_last_n(self, site, username, n=500):
         '''
         Grab the user's `n` most recent edits, build a set of the titles,
@@ -55,11 +55,6 @@ class EditGetter:
 
         try:
             response = query.submit()
-            if 'continue' in response:
-                query['continue'] = response['continue']['continue']
-                query['uccontinue'] = response['continue']['uccontinue']
-            else:
-                done = True
         except pywikibot.Error as e:
             # Something reasonably serious happened, so return.
             logging.warning('User contributions query failed')
@@ -87,9 +82,9 @@ class EditGetter:
 
         return(list(edited_titles))
     
-    def get_edits(self, lang, username, multiplier=0.98,
-                  min_articles=64,
-                  filter_minor=True, filter_reverts=True):
+    def make_profile(self, lang, username, multiplier=0.98,
+                     min_articles=64,
+                     filter_minor=True, filter_reverts=True):
         """
         Build an interest profile for the given user, try to return a
         minimum of `min_articles`.
@@ -115,7 +110,10 @@ class EditGetter:
         # An edit is scored as 0.98^n where n is the number of days
         # back since the most recent user edit (this prevents a user's
         # profile from being altered just by time passing).  We choose
-        # 0.98 because it means an edit 35 days out counts 0.5.
+        # 0.98 because it means an edit 35 days out counts 0.5.  At the
+        # same time, we set a lower bound of 0.025, meaning any edit
+        # older than ~1/2 year is scored the same. This is done to prevent
+        # adding and ranking very low scores.
         # We gather edits until we have k articles, or exhausted our
         # search.
 
@@ -212,10 +210,12 @@ class EditGetter:
                     profile[title] = 1
                 else:
                     # Note: first_date is the most recent edit, so we
-                    # subtract the edit's older timestamp to get the diff
+                    # subtract the edit's older timestamp to get the diff.
+                    # We use max() to prevent small-number math.
                     diff = first_date - timestamp
                     profile['interests'][title] = profile.get(title, 0) + \
-                                                  multiplier**diff.days
+                                                  max(0.025,
+                                                      multiplier**diff.days)
 
                 logging.info('Profile now contains {} articles'.format(len(profile['interests'])))
                                  
@@ -248,19 +248,78 @@ class EditGetter:
             return(True)
         
         return(False)
+
+    def get_edits(self, username, lang, n):
+        '''
+        Get a user's last `n` edits.  Kept for backwards compatibility
+        as it feeds the recserver's edit-based profiler.
+
+        :param username: Username of the user we're getting edits for
+        :param lang: Language code of the Wikipedia we're accessing
+        :paran n: Number of edits to grab
+        '''
+
+        # List of edits (as dicts) we'll return
+        user_edits = []
+
+        site = pywikibot.Site(lang)
+        query = pywikibot.data.api.Request(site=site, action="query")
+        query['list'] = "usercontribs"
+        query['ucnamespace'] = 0
+        query['uclimit'] = n
+        query['ucuser'] = username
+        query['continue'] = ''
+
+        try:
+            response = query.submit()
+        except pywikibot.Error as e:
+            # Something reasonably serious happened, so return.
+            logging.warning('User contributions query failed')
+            logging.warning('{} : {}'.format(e[0], e[1]))
+            return([])
+
+        # Valid response? If not, return an empty list
+        if not 'query' in response \
+           or not 'usercontribs' in response['query']:
+            logging.warning("Possible query response error for {}:{}, unable to continue".format(lang, username))
+            return(user_edits)
+          
+        edits = response['query']['usercontribs']
+        if not edits:
+            logging.info('{}:{} has no edits'.format(lang, username))
+            return(user_edits)
+
+        for edit in edits:
+            try:
+                if edit['minor']:
+                    edit['minor'] = 'm'
+                user_edits.append(edit)
+            except KeyError:
+                # edit info redacted
+                continue
+
+        return(user_edits)
  
 def main():
     logging.basicConfig(level=logging.INFO)
     
     lang = u'en'
     user = u'Nettrom'
-    myGetter = EditGetter()
-    profile = myGetter.get_edits(lang, user)
+    profiler = EditProfiler()
+    profile = profiler.make_profile(lang, user)
 
     print('Got interest profile with {n} items for user {username}'.format(n=len(profile['interests']),username=user))
     print(profile['interests'])
     print(profile['all_edits'])
     print("No. of items in profile: {}, no. of most recent edited articles: {}".format(len(profile['interests']), len(profile['all_edits'])))
 
+    print("")
+    print("Testing backwards compatibility...")
+    edits = profiler.get_edits(user, lang, 500)
+    print("Asked for 500 edits, got {} edits back".format(len(edits)))
+    print("Printing first 5:")
+    for edit in edits[:5]:
+        print(edit)
+    
 if __name__ == '__main__':
     main()

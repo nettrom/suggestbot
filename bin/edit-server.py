@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8  -*-
 """
-XML-RPC wrapper to instantiate the main recommendation server.
+XML-RPC wrapper to instantiate the edit profiler.
 
 Copyright (C) 2005-2016 SuggestBot Dev Group
 
@@ -24,7 +24,7 @@ Boston, MA  02110-1301, USA.
 import logging
 
 from suggestbot import config
-from suggestbot.recommenders import RecommendationServer
+from suggestbot.profilers import EditProfiler
 
 from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
@@ -46,16 +46,17 @@ def main():
     args = cli_parser.parse_args()
 
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.INFO)
 
-    recserver = RecommendationServer()
+    profiler = EditProfiler()
     server = SimpleXMLRPCServer(
-        (config.main_server_hostname, config.main_server_hostport),
+        (config.edit_server_hostname, config.edit_server_hostport),
         allow_none=True)
 
     server.register_introspection_functions()
-    server.register_function(recserver.recommend, 'recommend')
-    print("Recommendation server is running...")
+    server.register_function(profiler.get_edits, 'get_edits')
+    server.register_function(profiler.make_profile, 'make_profile')
+    print("Edit profiler is running...")
 
     # Run the server's main loop
     server.serve_forever()

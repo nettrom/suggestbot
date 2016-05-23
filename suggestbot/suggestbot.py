@@ -56,11 +56,9 @@ class NotLoggedInError(Exception):
     pass
 
 class SuggestBot:
-    def __init__(self, configFile=None, recPort=None, nRecs=3,
-                 postDelay=30, maxRetries=3, verbose=False, testRun=False,
+    def __init__(self, recPort=None, nRecs=3,
+                 postDelay=30, maxRetries=3, testRun=False,
                  lang=None):
-
-	# pywikibot.verbose = True;
 
         config.rec_server = "localhost"
         if recPort is not None:
@@ -68,9 +66,6 @@ class SuggestBot:
         config.nrecs = nRecs
         config.post_delay = postDelay
         config.post_retries = maxRetries
-
-        # Using getConfig() to test verbosity is too verbose.
-        self.verbose = verbose
 
         config.testrun = testRun
         config.connect_timeout = 5.0 # 5 second timeout
@@ -87,14 +82,14 @@ class SuggestBot:
         self.site = pywikibot.getSite(config.wp_langcode)
         self.site.login()
         # then we can simply check if we're logged in
-        return self.isLoggedIn()
+        return(self.isLoggedIn())
 
     def durrdurr(self):
         '''http://drmcninja.com/archives/comic/14p28'''
-        return self.login()
+        return(self.login())
 
     def pthooey(self):
-        return self.logout()
+        return(self.logout())
     
     def logout(self):
         '''Logs the bot out, if we're logged in.'''
@@ -103,7 +98,7 @@ class SuggestBot:
 
     def isLoggedIn(self):
         '''Returns username if we're logged in, None otherwise.'''
-        return self.site.user()
+        return(self.site.user())
 
     def getRecs(self, username="", userGroup="suggest", itemEnd=True,
                 filterMinor=False, filterReverts=False, useUserlinks=False,
@@ -161,29 +156,28 @@ class SuggestBot:
                          'use-userpage': useUserlinks,
                          'nrecs': config.nrecs,
                          'request-id': requestId,
+                         'request-type': 'regular'
                          }
 
         # Is this a one-time request, or a regular user?
-        request_type = 'regular'
         if isRequest:
-            request_type = 'single-request'
+            recParameters['request-type'] = 'single-request'
 
-        # If this is a request and the user has a list of pages they've expressed interest in...
-        if isRequest and interestPages \
-           and (len(interestPages) > 0):
-            recParameters['articles'] = interestPages
+            # If this is a request and the user has a list of pages they've expressed interest in...
+            if interestPages \
+               and (len(interestPages) > 0):
+                recParameters['articles'] = interestPages
 
         recs = {}
         try :
             recs= recServer.recommend(config.wp_langcode,
                                       username,
-                                      request_type,
                                       recParameters)
         except xmlrpc.client.Fault as e:
             logging.error("something went wrong when trying to get suggestions:")
-            logging.error("{error}".format(error=e))
+            logging.error("{}".format(e))
 
-        return recs
+        return(recs)
 
     def create_invoke(self, recs, module_name, method_name,
                       cat_order=[], add_include_clause=False):
@@ -269,7 +263,7 @@ class SuggestBot:
             
         ## Finish off with some closing brackets
         invoke_text += '}}'
-        return invoke_text
+        return(invoke_text)
             
     def createRecsPage(self, recs, recTemplate=None, userGroup=None):
         """
@@ -288,7 +282,7 @@ class SuggestBot:
 
         # FIXME: Should we send the user a message if we couldn't do anything?
         if not recs:
-            return None
+            return(None)
 
         # Create the parameter string of "|CAT?=ITEM" where ? is the order.
         paramString = ""
@@ -339,7 +333,7 @@ class SuggestBot:
                 # Set to True and uncomment if-block if you want that.
                 skipLinksAndHeadings = False
                 # if 'length:no' in recData['work']:
-                #     skipLinksAndHeadings = False;
+                #     skipLinksAndHeadings = False
                 
                 if not 'work' in recData \
                         or recData['work'] is None:
@@ -350,7 +344,7 @@ class SuggestBot:
 
                 # For each of the tasks...
                 for task in recData['work']:
-                    # print "task=", task;
+                    # print "task=", task
                     # split into task and yes/no/maybe
                     (task, verdict) = task.split(':')
                     # NOTE: Based on beta testing, we skip marking maybe-tasks
@@ -389,7 +383,7 @@ class SuggestBot:
         recString = "{{{{subst:{template}{params}}}}} -- ~~~~".format(
             template=recTemplate,
             params=paramString)
-        return recString
+        return(recString)
 
     # FIXME: get a unit test case of the recommendation post thingamajig
     # replacing content and stuff.
@@ -426,7 +420,7 @@ class SuggestBot:
         # the only one using it.
         lang = config.wp_langcode
         if lang == 'en':
-            parsedCode = mwp.parse(pageSource)
+            parsedCode = mwp.parse(pageSource, skip_style_tags=True)
             templates = parsedCode.filter_templates(recursive=True)
             for template in templates:
                 if template.name.matches('Ntsh'):
@@ -438,73 +432,73 @@ class SuggestBot:
         # Normal replacement or not replacement of suggestion post
         if not replace:
             newPageSource = "{current}\n\n{recs}".format(current=pageSource,
-                                                          recs=recMsg);
+                                                          recs=recMsg)
         else:
             # We're replacing, do some magic to find the last rec and
             # replace from there up until the next non-rec header (or EOF)
 
             # Compile rec message header regex, and all sub-section regexes.
-            recHeaderRe = re.compile(config.rec_header_re[lang], re.U);
-            subHeaderRegs = [];
+            recHeaderRe = re.compile(config.rec_header_re[lang], re.U)
+            subHeaderRegs = []
             for regEx in config.sub_header_re[lang]:
-                subHeaderRegs.append(re.compile(regEx, re.U));
+                subHeaderRegs.append(re.compile(regEx, re.U))
 
             # Parse the page contents
-            parsedCode = mwp.parse(pageSource);
+            parsedCode = mwp.parse(pageSource, skip_style_tags=True)
 
             # Indexes of where the rec message begins and ends
-            recMsgStartIdx = 0;
-            recMsgEndIdx = 0;
+            recMsgStartIdx = 0
+            recMsgEndIdx = 0
 
             # loop through i=0:length(nodes), search for the first occurrence of
             # a heading (isinstance heading) matching REC_HEADER_RE.
             # Store it as recMsgStartIdx if found.
-            i = 0;
+            i = 0
             while i < len(parsedCode.nodes):
-                node = parsedCode.nodes[i];
+                node = parsedCode.nodes[i]
                 if isinstance(node, mwp.nodes.heading.Heading) \
                    and recHeaderRe.search(node.strip()):
-                    recMsgStartIdx = i;
-                    break;
+                    recMsgStartIdx = i
+                    break
 
                 # Move along...
-                i += 1;
+                i += 1
 
             # If none was found, ignore and append
             if i == len(parsedCode.nodes):
                 newPageSource = "{current}\n\n{recs}".format(current=pageSource,
-                                                              recs=recMsg);
+                                                              recs=recMsg)
             else:
                 # examine the remaining list of nodes, if encountering a section
                 # header that does not match REC_HEADER_RE or the subheader regex,
                 # stop and store that index.
-                i = recMsgStartIdx+1;
+                i = recMsgStartIdx+1
                 while i < len(parsedCode.nodes):
-                    node = parsedCode.nodes[i];
+                    node = parsedCode.nodes[i]
                     if isinstance(node, mwp.nodes.heading.Heading):
-                        isMatch = recHeaderRe.search(node.strip()) is not None;
+                        isMatch = recHeaderRe.search(node.strip()) is not None
                         for regEx in subHeaderRegs:
                             if regEx.search(node.strip()):
-                                isMatch = isMatch or True;
+                                isMatch = isMatch or True
                         if not isMatch:
-                            recMsgEndIdx = i;
-                            break;
+                            recMsgEndIdx = i
+                            break
 
                     # Move along...
-                    i += 1;
+                    i += 1
 
                 # If we exhausted our search, set end index beyond end of nodes,
                 # so we delete up until the end.
                 if i == len(parsedCode.nodes):
-                    recMsgEndIdx = i;
+                    recMsgEndIdx = i
 
                 # Now the new page source is the content of parsedtext.nodes[:firstindex]
                 # + new content + the content of parsedtext.nodes[lastindex:]
                 newPageSource = "{beforeMsg}{recMsg}\n\n{afterMsg}".format(beforeMsg="".join([unicode(node) for node in parsedCode.nodes[:recMsgStartIdx]]),
                                                                            recMsg=recMsg,
-                                                                           afterMsg="".join([unicode(node) for node in parsedCode.nodes[recMsgEndIdx:]]));
+                                                                           afterMsg="".join([unicode(node) for node in parsedCode.nodes[recMsgEndIdx:]]))
 
-        return newPageSource;
+        return(newPageSource)
 
     def save_page(self, page, content, edit_comment,
                   watch=True, minor=False, force=False):
@@ -597,7 +591,7 @@ class SuggestBot:
         '''
         if not username or not recMsg:
             logging.error("Unable to post recs, username or recommendation not supplied.")
-            return False
+            return(False)
 
         # make a user object
         recUser = pywikibot.User(self.site, username)
@@ -605,7 +599,7 @@ class SuggestBot:
         # check if the user is blocked
         if recUser.isBlocked():
             logging.warnng("user {username} is blocked, posting aborted.".format(username=username).encode('utf-8'))
-            return False
+            return(False)
 
         # get the user's talk page, or a preferred page to post recs to if defined
         if page:
@@ -620,7 +614,7 @@ class SuggestBot:
             pageSource = ""
         except pywikibot.exceptions.IsRedirectPage:
             logging.warning("Destination page {title} is a redirect, posting cancelled.".format(title=destPage.title()))
-            return False
+            return(False)
 
         # What language are we posting to?
         lang = config.wp_langcode
@@ -629,7 +623,7 @@ class SuggestBot:
         # page is >1MB, skip posting, anticipating that it'll be shorter next time.
         if lang == 'en' and len(pageSource.encode('utf-8')) > 1024*1024:
             logging.warning("Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'))
-            return False
+            return(False)
 
         # Create new page source by adding or replacing suggestions
         newPageSource = self.addReplaceRecMessage(pageSource=pageSource,
@@ -647,13 +641,13 @@ class SuggestBot:
                                config.edit_comment[lang],
                                force=force)
             except PageNotSavedError:
-                return False
+                return(False)
 
         # OK, done
-        return True
+        return(True)
         
-    def recommend(self, username="", userGroup="suggest", itemEnd=True,
-                  filterMinor=False, filterReverts=False, useUserlinks=False,
+    def recommend(self, username, userGroup="suggest", itemEnd=True,
+                  filterMinor=True, filterReverts=True, useUserlinks=False,
                   recTemplate=None, force=False, page=None, replace=False,
                   isRequest=False):
         '''Get and post recommendations to the specific user based on the set
@@ -697,19 +691,19 @@ class SuggestBot:
 
            '''
         if not username:
-            sys.stderr.write("SuggestBot Error: must supply username to do recommendations.\n");
-            return None;
+            sys.stderr.write("SuggestBot Error: must supply username to do recommendations.\n")
+            return(None)
 
         # create user object
         # FIXME: instead of passing usernames around, we can pass this user object
         # around...
-        recUser = pywikibot.User(self.site, username);
+        recUser = pywikibot.User(self.site, username)
 
         # Check if the user is blocked.  Since that will aport posting, there's
         # no need to spend time generating recommendations.
         if recUser.isBlocked():
-            sys.stderr.write("SBot Warning: User:{username} is blocked, posting aborted.\n".format(username=recUser.username).encode('utf-8'));
-            return False;
+            sys.stderr.write("SBot Warning: User:{username} is blocked, posting aborted.\n".format(username=recUser.username).encode('utf-8'))
+            return(False)
 
         # What language are we posting to?
         lang = config.wp_langcode
@@ -718,35 +712,35 @@ class SuggestBot:
         # with posting, getting timeouts.
         try:
             if page:
-                destPage = pywikibot.Page(self.site, page);
+                destPage = pywikibot.Page(self.site, page)
             else:
-                destPage = recUser.getUserTalkPage();
-            pageSource = destPage.get();
+                destPage = recUser.getUserTalkPage()
+            pageSource = destPage.get()
             if lang == 'en' and len(pageSource.encode('utf-8')) > 1024*1024:
-                sys.stderr.write("SBot Warning: Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!\n".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'));
-                return False;
+                sys.stderr.write("SBot Warning: Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!\n".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'))
+                return(False)
         except pywikibot.exceptions.IsRedirectPage:
-            sys.stderr.write("SuggestBot Warning: Destination page {title} is a redirect, posting cancelled.\n".format(title=destPage.title()).encode('utf-8'));
-            return False;
+            sys.stderr.write("SuggestBot Warning: Destination page {title} is a redirect, posting cancelled.\n".format(title=destPage.title()).encode('utf-8'))
+            return(False)
         except pywikibot.exceptions.NoPage:
-            pass;
+            pass
 
         # get recommendations
         userRecs = self.getRecs(username=username, userGroup=userGroup,
                                 itemEnd=itemEnd, filterMinor=filterMinor,
                                 filterReverts=filterReverts, useUserlinks=useUserlinks,
-                                isRequest=isRequest);
+                                isRequest=isRequest)
         # if none, post?
         if not "recs" in userRecs \
                 or not userRecs["recs"]:
-            sys.stderr.write("SBot Warning: Got no recommendations for User:{username}\n".format(username=recUser.username).encode('utf-8'));
-            return False;
+            logging.error("SBot Warning: Got no recommendations for User:{username}\n".format(username=recUser.username))
+            return(False)
         # else, create recs message
         recMsg = self.createRecsPage(userRecs["recs"], recTemplate=recTemplate,
-                                     userGroup=userGroup);
+                                     userGroup=userGroup)
         # update userpage (test for now)
-        return self.postRecommendations(username=username, recMsg=recMsg,
-                                        page=page, force=force, replace=replace);
+        return(self.postRecommendations(username=username, recMsg=recMsg,
+                                        page=page, force=force, replace=replace))
 
     def stopme(self):
         pywikibot.stopme()
@@ -755,7 +749,7 @@ class SuggestBot:
         '''Get all links from the given pages restricted to the given namespaces'''
         if not pageTitles:
             logging.warning("getPageLinks called with no page titles.")
-            return None
+            return(None)
 
         # This method is based on pywikipedia's getReferences() method
         # (see wikipedia.py line 1196 onwards)
@@ -798,7 +792,7 @@ class SuggestBot:
             while not allDone:
                 pywikibot.get_throttle()
                 # FIXME: rewrite to use pywikibot.api instead
-                # json_data = query.GetData(params, self.site);
+                # json_data = query.GetData(params, self.site)
                 
                 # json_data is mostly a dict in this case.
                 # 'query' : the result of the query
@@ -849,13 +843,13 @@ class SuggestBot:
 
             i += slice_size
 
-        return linkedPages
+        return(linkedPages)
 
     def getBackLinks(self, pageTitles=None, namespaces=None):
         '''Get all backlinks from the given pages restricted to the given namespaces'''
         if not pageTitles:
             logging.warning("getBackLinks called with no page titles.")
-            return None
+            return(None)
 
         # The API only allows for requesting backlinks for _one_ page at a time,
         # so we'll simply push the request on to pywikipedia.
@@ -873,7 +867,7 @@ class SuggestBot:
                 if linkedpage.namespace in namespaces:
                     linkedPages[title].append(linkedpage.title)
 
-        return linkedPages
+        return(linkedPages)
 
     def processRegulars(self):
         """
@@ -939,7 +933,7 @@ class SuggestBot:
         myDb = db.SuggestBotDatabase()
         # if connection fails, fail too.
         if not myDb.connect():
-            return False
+            return(False)
 
         # if not, get data for all users of the current language version
         (dbconn, dbcursor) = myDb.getConnection()
@@ -954,7 +948,7 @@ class SuggestBot:
 
         if ord(row['daily_running']):
             logging.warning("SuggestBot is already posting to users on {0}-WP, exiting!".format(lang))
-            return True
+            return(True)
 
         # Update the status of busyness to pretty busy...
         dbcursor.execute(updateStatusTableQuery, {'status': 1,
@@ -971,7 +965,7 @@ class SuggestBot:
             # If tSLR.days < 0, something's not right:
             if timeSinceLastRun.days < 0:
                 logging.error("Time since last set of recs posted is negative, aborting!")
-                return False
+                return(False)
         else:
             # We might see this branch the first time we're running...
             timeSinceLastRun = timedelta(0)
@@ -1018,7 +1012,7 @@ class SuggestBot:
             # UTF-8ify it and check if we have a template, then use that.
             if design:
                 if not isinstance(design, unicode):
-                    design = unicode(design, 'utf-8', errors='strict');
+                    design = unicode(design, 'utf-8', errors='strict')
                 try:
                     recTemplate = config.templates[lang][design]
                 except KeyError:
@@ -1027,7 +1021,7 @@ class SuggestBot:
 
             # If user supplied a sub-page to post to, UTF-8ify it.
             if pagetitle and not isinstance(pagetitle, unicode):
-                pagetitle = unicode(pagetitle, 'utf-8', errors='strict');
+                pagetitle = unicode(pagetitle, 'utf-8', errors='strict')
 
             # If the user wants recs replaced, do so.
             replace = False

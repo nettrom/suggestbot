@@ -1024,7 +1024,7 @@ wp_langcode = "en"
 main_server_hostname = "localhost"
 main_server_hostport = 10010
 coedit_hostname = "localhost"
-coedit_hostport = 10001
+coedit_hostport = 11001
 textmatch_hostname = "localhost"
 textmatch_hostport = 10003
 edit_server_hostname = "localhost"
@@ -1056,10 +1056,16 @@ nrecs_per_server = 2500
 filter_minor = True
 filter_unimportant = True
 
-## Coedit threshold (number of edits in common to be a neighbour)
-## and backoff (amount to decrement threshold if neighborhood is small)
+## Coedit threshold (number of edits in common to be a neighbour),
+## whether we are allowed to decrement the coedit threshold,
+## minimum threshold to be considered a neighbour, threshold for
+## associations to be considered a candidate, and number of edits
+## to be considered an editor who can use minor flags correctly.
 coedit_threshold = 3
-coedit_backoff = 1
+coedit_backoff = True
+coedit_min_threshold = 1
+coedit_assoc_threshold = 0.0001
+coedit_filter_threshold = 18 
 
 ## API endpoint URLs for access to page views and article quality predictions
 pageview_url = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
