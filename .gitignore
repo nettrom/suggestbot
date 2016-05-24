@@ -1,3 +1,9 @@
+# NLTK assets
+nltk_data/
+
+# Log files
+logs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

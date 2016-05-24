@@ -605,7 +605,7 @@ solr_delurl = {
 # uses 'regulars')
 templates = {
     'en': {
-        'request': 'User:SuggestBot/Templates/RequestsPlain',
+        'request': 'User:SuggestBot/Templates/RequestsFull',
         'plain': 'User:SuggestBot/Templates/RegularsPlain',
         'regulars': 'User:SuggestBot/Templates/RegularsFull',
         # 'regulars': 'User:SuggestBot/Templates/Regulars',
@@ -1022,23 +1022,23 @@ wp_langcode = "en"
 # Server configurations
 # The recommendation server will always listen on "localhost:$MAIN_SERVER_PORT'
 main_server_hostname = "localhost"
-main_server_hostport = 10010
+main_server_hostport = 11010
 coedit_hostname = "localhost"
 coedit_hostport = 11001
 textmatch_hostname = "localhost"
-textmatch_hostport = 10003
+textmatch_hostport = 11003
 edit_server_hostname = "localhost"
-edit_server_hostport = 10007
+edit_server_hostport = 11007
 filter_server_hostname = "localhost"
-filter_server_hostport = 10009
+filter_server_hostport = 11009
 popularity_and_quality_hostname= "localhost"
-popularity_and_quality_hostport= 10008
+popularity_and_quality_hostport= 11008
 
 textdaemon_hostname = "localhost"
-textdaemon_hostport = 10128
+textdaemon_hostport = 11128
 
 classifier_hostname = "localhost"
-classifier_hostport = 10129
+classifier_hostport = 11129
 
 # These are kept for backwards compatibility, as the links server is now on
 # the Toolserver.  The port number is used for picking recommendations.
@@ -1051,6 +1051,17 @@ nedits = 128
 ## Number of articles to recommend per category, and request from a server
 nrecs_per_taskcat = 3
 nrecs_per_server = 2500
+
+## Task categories, matching the relevant labels in the task database
+task_categories = {
+    'en' : "STUB1,STUB2,SOURCE1,SOURCE2,CLEANUP,EXPAND,MERGE,WIKIFY,ORPHAN,UNENC",
+    'no' : "STUBBER,KILDER1,KILDER2,OPPRYDNING,UFULLSTENDIG,UTVID,FLETT,OBJEKTIV,VSTUBB1,VSTUBB2",
+    'sv' : "STUBBAR1,STUBBAR2,STUBBAR3,STUBBAR4,STUBBAR5,STÄDA,KÄLLOR1,KÄLLOR2,SPRÅK,UOPPDATERAD,INFOGA",
+    'pt' : 'STUB1,STUB2,STUB3,STUB4,SOURCE1,SOURCE2,IMAGES1,IMAGES2,CLEANUP,MERGE,UPDATE,TRANSLATE',
+    'ru' : 'SOURCE,WIKIFY,IMAGES,ORPHAN,EXPAND,STUB,CLEANUP,RELIABILITY,UPDATE,NOTABILITY,TRANSLATE,OBJECTIVITY',
+    'fa' : 'SOURCE,WIKIFY,STYLE,ORPHAN,EXPAND,MERGE,OBJECTIVITY,STUB,IMAGES,TRANSLATE',
+    'fr' : 'SOURCE1,SOURCE2,VERIFY,UPDATE,UNENC,WIKIFY,ORPHAN,PROMO,STUB1,STUB2'
+}
 
 ## Do we filter minor and unimportant edits by default?
 filter_minor = True

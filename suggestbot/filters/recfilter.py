@@ -151,7 +151,7 @@ class RecFilter:
         # Connect to database
         if not self.db.connect():
             logging.error("Unable to connect to the SuggestBot database, can't filter squat!")
-            return recs
+            return(recs)
         
         (self.dbConn, self.dbCursor) = self.db.getConnection()
 
@@ -220,7 +220,7 @@ class RecFilter:
                 # If we can't even find one randomly, that's really bad.
                 if not found:
                     logging.warning("Whoa, couldn't even randomly pick a rec for {cat}!".format(cat=cat))
-                    return {}
+                    return({})
 
         # For each recommended article, look up and store
         # _all_ the work categories it is in.
@@ -253,7 +253,7 @@ class RecFilter:
                     
         logging.info("OK, done!")
 
-        if params['log']:
+        if 'log' in params and params['log']:
             # Update logged recs by adding 1 to the age of everything
             self.dbCursor.execute(updateOldRecsQuery, {'lang': lang,
                                                        'username': user})
@@ -322,9 +322,8 @@ class RecFilter:
 
         self.db.disconnect()
         print("Completed filtering recommendations for user {0}:{1}".format(lang, user))
-
         # Send back the recommendations.
-        return recs
+        return(recs)
 
     def getOneRandomRec(self, cat=None, rank=0, recs=None, edits=None,
                         maxLength=0, lang=None):
@@ -380,20 +379,21 @@ class RecFilter:
 
         # We always force random IDs to start looking for items at slot 0, of course.
         randomRanks = { cat : { self.randomID : 0 }}
-        return self.getOneRec(recList=recList, recId=self.randomID,
+        return(self.getOneRec(recList=recList, recId=self.randomID,
                               cat=cat, rank=rank, recs=recs,
-                              edits=edits, lang=lang, recRanks=randomRanks)
+                              edits=edits, lang=lang,
+                              recRanks=randomRanks))
 
     def tooManyEdits(self, item=None):
         if not item:
-            return False
+            return(False)
         try:
             if editCounts[item] >= self.tooManyEdits:
-                return True
+                return(True)
         except KeyError:
             # item not in editCounts, pass and return False
             pass
-        return False
+        return(False)
 
     def getOneRec(self, recList=None, recId=None, cat=None, rank=0, recs=None,
                   edits=None, lang=None, recRanks=None):
@@ -457,10 +457,10 @@ class RecFilter:
             # Set $rec_ranks_href to the rank of the next item we want to visit,
             # which is the one right after the one we just booked.
             recRanks[cat][recId] = j+1
-            return True
+            return(True)
     
         # We must have failed.
-        return False
+        return(False)
 
     def inCategory(self, cat, rec):
         """
@@ -473,9 +473,8 @@ class RecFilter:
         :type rec: str
         """
 
-        # This is just asking the SQL database if category "foo" contains "bar"
-        # which we have indexes to make sure goes fast.
-
+        # This is just asking the SQL database if category "foo"
+        # contains "bar" which we have indexes to make sure goes fast.
         # logging.debug('testing if {0} is in category {1}'.format(rec, cat))
         strippedCat = re.sub(r'\d*', '', cat) # remove numbers for multiply-listed categories
         self.dbCursor.execute(self.catMembershipQuery,
@@ -483,5 +482,5 @@ class RecFilter:
                                'title': rec})
         rows = self.dbCursor.fetchall()
         if rows:
-            return True
-        return False
+            return(True)
+        return(False)

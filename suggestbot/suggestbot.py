@@ -108,10 +108,10 @@ class SuggestBot:
            returned.
 
            @param username: The name of the user we are recommending articles to
-           @type username: unicode
+           @type username: str
 
            @param userGroup: Which group the user belongs to
-           @type userGroup: unicode
+           @type userGroup: str
 
            @param itemEnd: recommend based on the user's oldest (False)
                            or most recent (True) 500 contributions in Main namespace
@@ -214,7 +214,7 @@ class SuggestBot:
             rec_data['cat'] = rec_data['cat'].lower()
             rec_data['cat'] = re.sub(r'(\w+)\d+', r'\1', rec_data['cat'])
             ## Capitalise assessment rating, use 'NA' if no rating
-            if rec_data['qual'] == 'NOCLASS':
+            if rec_data['qual'] in ['NOCLASS', 'NA']:
                 rec_data['qual'] = 'NA'
             else:
                 rec_data['qual'] = rec_data['qual'].capitalize()
@@ -267,17 +267,17 @@ class SuggestBot:
             
     def createRecsPage(self, recs, recTemplate=None, userGroup=None):
         """
-        @param recs Recommendations for this user in the right order needed
+        :param recs Recommendations for this user in the right order needed
                     for substitution into our template.
-        @type recs list of dicts
-        @param recTemplate Relative address on Wikipedia to the template we use for
+        :type recs list of dicts
+        :param recTemplate Relative address on Wikipedia to the template we use for
                            substitution when posting recommendations.  If 'None',
                            the request template found in Config.py for the language
                            defined in config.pm is used (except when lang is defined).
-        @type recTemplate str or None
+        :type recTemplate str or None
 
-        @param userGroup: name of the (experiment) group the user is in
-        @type userGroup: unicode
+        :param userGroup: name of the (experiment) group the user is in
+        :type userGroup: str
         """
 
         # FIXME: Should we send the user a message if we couldn't do anything?
@@ -286,7 +286,7 @@ class SuggestBot:
 
         # Create the parameter string of "|CAT?=ITEM" where ? is the order.
         paramString = ""
-        for (recTitle, recData) in recs.iteritems():
+        for (recTitle, recData) in recs.items():
             paramString = "{params}|{category}{order}={title}".format(params=paramString,
                                                                        category=recData['cat'],
                                                                        order=recData['rank'],
@@ -314,7 +314,7 @@ class SuggestBot:
                     if recData['qual'] != "NOCLASS":
                         # Set, and capitalise, unless "FA" or "GA"
                         assessedClass = recData['qual']
-                        if assessedClass not in ["FA", "GA"]:
+                        if assessedClass not in ["FA", "GA", "NA"]:
                             assessedClass = assessedClass.capitalize()
                     # Turn into quality file link w/assessment and prediction,
                     # using quality map in configuration.
@@ -340,7 +340,7 @@ class SuggestBot:
                     recData['work'] = []
 
                 # Make set of all tasks
-                all_tasks = set(config.humantasks.values())
+                all_tasks = set(config.human_tasks.values())
 
                 # For each of the tasks...
                 for task in recData['work']:
@@ -352,7 +352,7 @@ class SuggestBot:
                     if verdict == 'maybe':
                         verdict = 'no'
                     # map into human-readable form
-                    task = config.humantasks[task]
+                    task = config.human_tasks[task]
                     # should we skip headings and links?
                     if task in ["headings", "links"] \
                             and skipLinksAndHeadings:
@@ -395,10 +395,10 @@ class SuggestBot:
         page source.
 
         @param pageSource: source wikitext of the page
-        @type pageSource: unicode
+        @type pageSource: str
 
         @param recMsg: wikitext of the article recommendations
-        @type recMsg: unicode
+        @type recMsg: str
 
         @param replace: are we replacing (True) or appending (False)?
         @type replace: bool
@@ -427,7 +427,7 @@ class SuggestBot:
                     template.name = 'Hs'
                     
             # Replace current wikitext with new code that uses Template:Hs
-            pageSource = unicode(parsedCode)
+            pageSource = str(parsedCode)
 
         # Normal replacement or not replacement of suggestion post
         if not replace:
@@ -494,9 +494,9 @@ class SuggestBot:
 
                 # Now the new page source is the content of parsedtext.nodes[:firstindex]
                 # + new content + the content of parsedtext.nodes[lastindex:]
-                newPageSource = "{beforeMsg}{recMsg}\n\n{afterMsg}".format(beforeMsg="".join([unicode(node) for node in parsedCode.nodes[:recMsgStartIdx]]),
+                newPageSource = "{beforeMsg}{recMsg}\n\n{afterMsg}".format(beforeMsg="".join([str(node) for node in parsedCode.nodes[:recMsgStartIdx]]),
                                                                            recMsg=recMsg,
-                                                                           afterMsg="".join([unicode(node) for node in parsedCode.nodes[recMsgEndIdx:]]))
+                                                                           afterMsg="".join([str(node) for node in parsedCode.nodes[recMsgEndIdx:]]))
 
         return(newPageSource)
 
@@ -512,10 +512,10 @@ class SuggestBot:
         @type page: pywikibot.Page
 
         @param content: New content for the page
-        @type content: unicode
+        @type content: str
 
         @param edit_comment: Edit comment to use when saving
-        @type edit_comment: unicode
+        @type edit_comment: str
 
         @param watch: Add the page to our watchlist?
         @type watch: bool
@@ -633,7 +633,7 @@ class SuggestBot:
         # if testing, print the proposed userpage
         if config.testrun:
             print("SuggestBot is doing a test run. Here's the new page:")
-            print(newPageSource.encode('utf-8'))
+            print(newPageSource)
         else:
             # Make an edit to save the new page contents...
             try:
@@ -654,7 +654,7 @@ class SuggestBot:
            of options given (see getRecs() for specifics).
 
            @param username: What user are we recommending articles to?
-           @type username: unicode
+           @type username: str
 
            @param userGroup: Which user group does this user belong to?
            @type userGroup: str
@@ -817,7 +817,7 @@ class SuggestBot:
                     continue
 
                 all_pages = json_data['query']['pages']
-                for (page, page_data) in all_pages.iteritems():
+                for (page, page_data) in all_pages.items():
                     page_title = page_data['title']
                     if not page_title in linkedPages:
                         # create a new list for the links
@@ -1002,8 +1002,6 @@ class SuggestBot:
             # utf8_bin collation, which is the equivalent of "VARCHAR() BINARY"
             # that's used on the Wikimedia servers.
             username = row['username']
-            if not isinstance(username, unicode):
-                username = unicode(username, 'utf-8', errors='strict')
             pagetitle = row['page_title']
             design = row['design']
 
@@ -1011,17 +1009,12 @@ class SuggestBot:
             # If the user has chosen to use a different design from the default,
             # UTF-8ify it and check if we have a template, then use that.
             if design:
-                if not isinstance(design, unicode):
-                    design = unicode(design, 'utf-8', errors='strict')
                 try:
                     recTemplate = config.templates[lang][design]
                 except KeyError:
                     pass
                 logging.info("found design {0} with template {1}".format(design, recTemplate))
 
-            # If user supplied a sub-page to post to, UTF-8ify it.
-            if pagetitle and not isinstance(pagetitle, unicode):
-                pagetitle = unicode(pagetitle, 'utf-8', errors='strict')
 
             # If the user wants recs replaced, do so.
             replace = False

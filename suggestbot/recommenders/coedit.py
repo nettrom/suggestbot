@@ -51,7 +51,8 @@ class Recommender:
 
         :param username: Name of the user we're recommending to
         :param lang: Language code of the Wikipedia we're on
-        :param user_edit: List of the user's edited articles
+        :param user_edit: Dictionary of the user's edited articles
+                          mapping page titles to interest scores
         :param nrecs: Number of recommendations to return
         :type nrecs: int
         :param threshold: Threshold for considering a user as a neighbour
@@ -85,7 +86,10 @@ class Recommender:
 
         sys.stderr.write("Got request to recommend {} articles to {}:User:{} based on {} edited articles\n".format(
             params['nrecs'], lang, username, len(user_edits)))
-            
+
+        # We only use the page titles at the moment
+
+        
         # Get some recs.
         recs = self.get_recs_at_coedit_threshold(lang, username, user_edits,
                                                  params)

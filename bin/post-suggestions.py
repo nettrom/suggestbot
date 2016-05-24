@@ -130,7 +130,7 @@ def main():
                                      page=args.bypasspage,
                                      replace=args.replace)
             if status:
-                print("Successfully posted recommendations to %s" % (user['username'],))
+                print("Successfully posted recommendations to {}".format(user))
     finally:
         myBot.stopme()
 

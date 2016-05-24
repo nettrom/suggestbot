@@ -122,7 +122,7 @@ class RecommendationServer:
                 break
 
         # Return a tuple of all edits and the useful ones
-        return((all_edits, useful_edits))
+        return(all_edits, useful_edits)
         
     def get_coedit_recs(self, lang, user, user_edits):
         '''
@@ -167,12 +167,15 @@ class RecommendationServer:
             hostname=config.textmatch_hostname,
             port=config.textmatch_hostport))
         try:
-            recommendations = sp.getedits(user,
-                                          lang,
-                                          user_edits,
-                                          config.nrecs_per_server)
+            rec_params = {
+                'nrecs': config.nrecs_per_server
+                }
+            recommendations = sp.recommend(user,
+                                           lang,
+                                           user_edits,
+                                           rec_params)
         except xmlrpc.client.Error as e:
-            logging.error('Failed to get coedit recommendations for {0}:User:{1}'.format(
+            logging.error('Failed to get text-based recommendations for {0}:User:{1}'.format(
                 lang, user))
             logging.error(e)
 
@@ -188,6 +191,10 @@ class RecommendationServer:
         :param user_edits: Dict of edits this user made (title -> num_edits)
         '''
 
+        # The link recommender expects a dictionary mapping page titles
+        # to scores, so we make that dictionary
+        user_edit_dict = {title : 1 for title in user_edits}
+        
         recommendations = []
 
         req_headers = {
@@ -198,10 +205,11 @@ class RecommendationServer:
                       'nrecs': config.nrecs_per_server}
         
         attempts = 0
-        while attempts < config.max_url_attempts:
+        while attempts < config.max_url_attempts \
+              and len(recommendations) == 0:
             attempts += 1
             r = requests.post(config.linkrec_url,
-                              data={'items': json.dumps(user_edits),
+                              data={'items': json.dumps(user_edit_dict),
                                     'params': json.dumps(req_params)},
                               headers=req_headers)
             if r.status_code != 200:
@@ -214,7 +222,6 @@ class RecommendationServer:
                     logging.error("Unable to decode response as JSON")
                 except KeyError:
                     logging.error("Did not find key 'success' in reponse, error?")
-
         if attempts == config.max_url_attempts:
             logging.warning('Reached max attempts to contact Tool Labs HTTP server without success')
         return(recommendations)
@@ -256,7 +263,7 @@ class RecommendationServer:
         
         # We need to keep track of all items, even if some are filtered
         all_articles = {}
-        user_articles = {}
+        user_articles = []
 
         if 'articles' in rec_params and len(rec_params['articles']) > 0:
             # We were given a set of articles to use as a basis
@@ -265,7 +272,8 @@ class RecommendationServer:
             if len(user_articles) > config.nedits:
                 user_articles = user_articles[:config.nedits]
         else:
-            user_articles = self.get_edited_items(lang, username)
+            (all_articles, user_articles) = self.get_edited_items(
+                lang, username)
 
         if not user_articles:
             logging.warning('Found no articles to use as a basis for {0}:{1}'.format(lang, username))
@@ -287,7 +295,7 @@ class RecommendationServer:
                         [(rec_params['request-id'], title)
                          for article in user_articles])
                 except MySQLdb.Error as e:
-                    logging.error('Failed to insert seedsinto the database')
+                    logging.error('Failed to insert seeds into the database')
                     logging.error('{0} : {1}'.format(e[0], e[1]))
                      
                 self.db.disconnect()
@@ -315,12 +323,26 @@ class RecommendationServer:
         if rec_lists['textmatch']:
             logging.info('Successfully retrieved text-based recommendations')
 
+        # The recommenders returns an ordered list of dicts, where
+        # each list item is a dict with a key "item" mapping to the
+        # page title, and "value" to the score returned.  At the
+        # moment we only care about rank, so we collapse these to
+        # lists of page titles
+        for recommender in rec_lists.keys():
+            rec_lists[recommender] = [rec['item'] \
+                                      for rec in rec_lists[recommender]]
+            
+        # Add categories if not present
+        if not 'categories' in rec_params:
+            rec_params['categories'] = config.task_categories[lang]
+            
         # Prepare the parameters for the filter server
         filter_server_params = {
             'categories' : rec_params['categories'],
-            'nrecs-per-server' : rec_params['nrecs_per_server'],
+            'nrecs-per-server' : config.nrecs_per_server,
             'request-type' : rec_params['request-type'],
-            'nrecs' : rec_params['nrecs']
+            'nrecs' : rec_params['nrecs'],
+            'log' : True,
             }
 
         filtered_recs = []
@@ -329,11 +351,11 @@ class RecommendationServer:
             port=config.filter_server_hostport))
         try:
             logging.info('Filtering recommendations')
-            filter_recs = sp.getrecs(username,
-                                     lang,
-                                     rec_lists,
-                                     all_articles,
-                                     filter_server_params)
+            filtered_recs = sp.getrecs(username,
+                                       lang,
+                                       rec_lists,
+                                       all_articles,
+                                       filter_server_params)
             logging.info('Successfully filtered recommendations')
         except xmlrpc.client.Error as e:
             logging.error("Failed to filter recommendations for {0}:User:{1}".format(lang, username))
@@ -343,6 +365,6 @@ class RecommendationServer:
         rec_result['recs'] = filtered_recs
 
         print("Completed recommendations for {0}:User:{1}".format(lang, username))
-
+        logging.info("Returning {} recommendations".format(len(rec_result['recs'])))
         return(rec_result)
 
