@@ -1022,17 +1022,17 @@ wp_langcode = "en"
 # Server configurations
 # The recommendation server will always listen on "localhost:$MAIN_SERVER_PORT'
 main_server_hostname = "localhost"
-main_server_hostport = 11010
+main_server_hostport = 10010
 coedit_hostname = "localhost"
-coedit_hostport = 11001
+coedit_hostport = 10001
 textmatch_hostname = "localhost"
-textmatch_hostport = 11003
+textmatch_hostport = 10003
 edit_server_hostname = "localhost"
-edit_server_hostport = 11007
+edit_server_hostport = 10007
 filter_server_hostname = "localhost"
-filter_server_hostport = 11009
+filter_server_hostport = 10009
 popularity_and_quality_hostname= "localhost"
-popularity_and_quality_hostport= 11008
+popularity_and_quality_hostport= 10008
 
 textdaemon_hostname = "localhost"
 textdaemon_hostport = 11128
