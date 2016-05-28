@@ -26,8 +26,11 @@ import re
 import sys
 import logging
 
-from suggestbot import config, db
+from suggestbot import config
 import suggestbot.utilities.reverts as sur
+
+from suggestbot import db
+import MySQLdb
 
 import json
 import requests
@@ -292,7 +295,7 @@ class RecommendationServer:
                 try:
                     self.dbcursor.executemany(
                         addseed_query,
-                        [(rec_params['request-id'], title)
+                        [(rec_params['request-id'], article)
                          for article in user_articles])
                 except MySQLdb.Error as e:
                     logging.error('Failed to insert seeds into the database')

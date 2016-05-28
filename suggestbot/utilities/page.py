@@ -378,13 +378,21 @@ def RatingGenerator(pages, step=50):
     Generate pages with assessment ratings.
     '''
 
-    # preload talk page contents in bulk to speed up processing
-    tp_gen = PreloadingGenerator(TalkPageGenerator(pages), step=step)
+    # Preload talk page contents in bulk to speed up processing
+    # Note: since pywikibot's PreloadingGenerator doesn't guarantee
+    #       order, we'll have to exhaust it and map title to talkpage.
+    tp_map = {}
+    for talkpage in PreloadingGenerator(
+            TalkPageGenerator(pages), step=step):
+        tp_map[talkpage.title(withNamespace=False)] = talkpage
 
     # iterate and set the rating
-    for page, talkpage in zip(pages, tp_gen):
+    for page in pages:
         try:
+            talkpage = tp_map[page.title()]
             page._rating = page.get_assessment(talkpage.get())
+        except KeyError:
+            page._rating = 'na'
         except pywikibot.NoPage:
             page._rating = 'na'
         except pywikibot.IsRedirectPage:
