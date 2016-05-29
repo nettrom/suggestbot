@@ -87,12 +87,9 @@ class Recommender:
         sys.stderr.write("Got request to recommend {} articles to {}:User:{} based on {} edited articles\n".format(
             params['nrecs'], lang, username, len(user_edits)))
 
-        # We only use the page titles at the moment
-
-        
         # Get some recs.
-        recs = self.get_recs_at_coedit_threshold(lang, username, user_edits,
-                                                 params)
+        recs = self.get_recs_at_coedit_threshold(lang, username,
+                                                 user_edits, params)
 
         # sys.stderr.write("Got {} recs back\n".format(len(recs)))
         
@@ -195,9 +192,6 @@ class Recommender:
         user_assoc = {}
         user_shared = {}
 
-        user = ''
-        num_edits = 0
-        page_title = ''
         for item in contribs:
 	    # For each article the user has edited, find other editors.
             other_editors = {}
@@ -214,7 +208,7 @@ class Recommender:
                     continue
                 
                 # User can't be their own neighbour
-                if user == username:
+                if user == user_for_query:
                     continue
                 
                 # OK, add user to hash
@@ -246,9 +240,10 @@ class Recommender:
                     continue
 
                 # User can't be their own neighbour
-                if user == username:
+                if user == user_for_query:
                     continue
-                
+
+                # Passed tests, add as a minor user
                 seen_minors[user] = 1
 
 	        # Is user above threshold?  If so, skip...
