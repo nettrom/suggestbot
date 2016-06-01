@@ -37,8 +37,9 @@ lang_codes={
     'sv': 'swedish',
     'pt': 'portuguese',
     'fa': 'persian',
-    'h': 'hungarian',
-    'r': 'russian',
+    'hu': 'hungarian',
+    'ru': 'russian',
+    'fr': 'french'
 }
 
 # Edit comments used when posting recommendations
@@ -48,8 +49,9 @@ edit_comment = {
     'sv': "FörslagsBot rekommenderar dessa artiklar...",
     'pt': "SuggestBot recomenda estes artigos",
     'fa': 'SuggestBot recommends these articles...',
-    'h': 'SuggestBot recommends these articles...',
-    'r': 'SuggestBot предлагает следующие статьи...',
+    'hu': 'SuggestBot recommends these articles...',
+    'ru': 'SuggestBot предлагает следующие статьи...',
+    'fr': 'Suggestbot recommande ces articles...',
 }
 
 # Edit comments used when removing the request template
@@ -60,8 +62,9 @@ replace_comment = {
     'sv': "Tar bort FörslagsBots mall så förslag inte skickas fler gånger",
     'pt': "Modelo de pedido de SuggestBot removido para evitar postagens múltiplas",
     'fa': 'Removed SuggestBot request template to prevent multiple suggestions posts',
-    'h': 'Removed SuggestBot request template to prevent multiple suggestions posts',
-    'r': 'Удаление шаблона запроса к SuggestBot для предотвращения дублирования сообщений'
+    'hu': 'Removed SuggestBot request template to prevent multiple suggestions posts',
+    'ru': 'Удаление шаблона запроса к SuggestBot для предотвращения дублирования сообщений',
+    'fr': 'Retrait du modèle de demande pour SuggestBot pour éviter les ajouts multiples',
 }
 
 # Table names for database tables containing task categories
@@ -72,8 +75,9 @@ task_table = {
     'sv': 'svwiki_work_category_data',
     'pt': 'ptwiki_work_category_data',
     'fa': 'fawiki_work_category_data',
-    'h': 'huwiki_work_category_data',
-    'r': 'ruwiki_work_category_data'
+    'hu': 'huwiki_work_category_data',
+    'ru': 'ruwiki_work_category_data',
+    'fr': 'frwiki_work_category_data',
 }
 
 # Configuration of categories containing articles that need work.
@@ -109,8 +113,9 @@ stub_re = {
     "sv": r"[Ss]tubb", # Swedish
     "pt": r"!Esboços (sobre|por|maiores que)", # Portuguese
     'fa': r'مقاله‌های خرد',
-    'h': None,
-    'r': r"Незавершённые статьи",
+    'hu': None,
+    'ru': r"Незавершённые статьи",
+    'fr': r'Wikipédia[:]ébauche\s+',
 }
 
 tasks = {
@@ -120,12 +125,14 @@ tasks = {
                            'Articles to be merged'],
             'recurseCategories': {'Merge by month': 1},
             'inclusion': None,
-            'exclusion': stub_re['en'] },
+            'exclusion': stub_re['en']
+            },
         'WIKIFY': {
             'categories': ['All articles covered by WikiProject Wikify'],
             'recurseCategories': {},
             'inclusion': None,
-            'exclusion': None},
+            'exclusion': None
+            },
         'CLEANUP': {
             'categories': ['All pages needing cleanup',
                            'Articles with excessive see also sections',
@@ -134,78 +141,80 @@ tasks = {
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'SOURCE': {
             'categories': ['All articles lacking reliable references',
                            'All articles needing additional references',
                            'All articles lacking sources',
                            'All articles with topics of unclear notability',
-                       ],
+                           ],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'EXPAND': {
             'categories': ['All articles to be expanded',
                            "All Wikipedia articles in need of updating"],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'STUB': {
             'categories': [],
             'recurseCategories': {'Stub_categories': 5},
             'inclusion': stub_re['en'],
-            'exclusion': None, },
+            'exclusion': None,
+            },
         'ORPHAN': {
             'categories': ['All orphaned articles'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'UNENC': { # unencyclopædic articles
             'categories': ['All NPOV disputes',
                            'All articles that may contain original research'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
+            },
         },
-    },
     'pt': {
         'STUB': {
             'categories': ["!Artigos mínimos", ],
             'recurseCategories': {"!Esboços": 5},
             'inclusion': stub_re['pt'],
             'exclusion': None,
-        },
+            },
         'TRANSLATE': {
             'categories': [],
             'recurseCategories': {"!Artigos em tradução": 5},
             'inclusion': None,
             'exclusion': stub_re['pt'],
-        },
+            },
         'SOURCE': {
             'categories': ["!Artigos com referências não fiáveis",
                            "!Artigos com citações quebradas"],
             'recurseCategories': {"!Artigos que carecem de fontes": 5,
                                   "!Artigos que carecem de fontes secundárias": 5,
-                                  "!Artigos que necessitam de verificação factual": 5},
+                                  "!Artigos que necessitam de verificação factual": 5
+                                  },
             'inclusion': None,
             'exclusion': stub_re['pt'],
-        },
+            },
         'MERGE': {
             'categories': [],
             'recurseCategories': {"!Artigos a sofrerem fusão": 5},
             'inclusion': r"(!Artigos a sofrerem)|(!Artigos de .* a sofrerem)",
             'exclusion': stub_re['pt'],
-        },
+            },
         'CLEANUP': {
             'categories': [],
             'recurseCategories': {"!Páginas a reciclar": 3,
                                   "!Artigos que necessitam de esclarecimento": 2},
             'inclusion': None,
             'exclusion': stub_re['pt'],
-        },
+            },
         'UPDATE': {
             'categories': [],
             'recurseCategories': {"!Artigos com dados desatualizados": 3,
@@ -214,14 +223,14 @@ tasks = {
                                   "!Artigos parciais": 3},
             'inclusion': None,
             'exclusion': stub_re['pt'],
-        },
+            },
         'IMAGES': {
             'categories': [],
             'recurseCategories': {"!Artigos sem imagens": 5},
             'inclusion': None,
             'exclusion': stub_re['pt'],
+            },
         },
-    },
     'no': {
         'KILDER': {
             # Note: As of 2013-11-11, there's only four source-related
@@ -232,259 +241,314 @@ tasks = {
             'recurseCategories': {'Artikler som trenger referanser': 3},
             'inclusion': None,
             'exclusion': stub_re['no'],
-        },
+            },
         'FLETT': {
             "categories": ['Artikler_som_bør_flettes'],
             "recurseCategories": {},
             "inclusion": None,
             "exclusion": stub_re['no'],
-        },
+            },
         'OPPRYDNING': {
             "categories": [],
             "recurseCategories": {'Opprydning': 1},
             "inclusion": None,
             "exclusion": stub_re['no'],
-        },
+            },
         'OBJEKTIV': {
             "categories": ['Objektivitet', 'Nøyaktighet',
                            'Uencyklopediske_artikler'],
             "recurseCategories": {},
             "inclusion": None,
             "exclusion": stub_re['no'],
-        },
+            },
         'UFULLSTENDIG': {
             "categories": ['Ufullstendige_lister'],
             "recurseCategories": {},
             "inclusion": None,
             "exclusion": stub_re['no'],
-        },
+            },
         'UTVID': {
             "categories": ['Snevre_artikler', 'Sider som må utvides'],
             "recurseCategories": {},
             "inclusion": None,
             "exclusion": stub_re['no'],
-        },
-    'STUBBER': {
-        "categories": [],
-        "recurseCategories": {
-            'Stubber etter størrelse': 2,
-        'Stubber': 5},
-        "inclusion": stub_re['no'],
-        "exclusion": None,
-    },
+            },
+        'STUBBER': {
+            "categories": [],
+            "recurseCategories": {
+                'Stubber etter størrelse': 2,
+                'Stubber': 5},
+            "inclusion": stub_re['no'],
+            "exclusion": None,
+            },
         'VSTUBB': {
             "categories": ['Viktige stubber'],
             "recurseCategories": {},
             "inclusion": None,
-        "exclusion": None,
+            "exclusion": None,
+            },
         },
-    },
     'sv': {
         'INFOGA': {
             'categories': ['Samtliga artiklar föreslagna för sammanslagningar och delningar',],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-    },
+            },
         'WIKIFIERA': {
             'categories': ['Artiklar som behöver wikifieras-samtliga'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
-    'UOPPDATERAD': {
-        'categories': ['Ej uppdaterad-samtliga',
-                       'Samtliga utgångna bäst före'],
-        'recurseCategories': {},
-        'inclusion': None,
-        'exclusion': None,
-    },
-        'GLOBALT': {
-        'categories': ['Wikipedia:Globalt perspektiv-samtliga', ],
+            },
+        'UOPPDATERAD': {
+            'categories': ['Ej uppdaterad-samtliga',
+                           'Samtliga utgångna bäst före'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
+        'GLOBALT': {
+            'categories': ['Wikipedia:Globalt perspektiv-samtliga', ],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None,
+            },
         'SPRÅK': {
             'categories': [],
             'recurseCategories': {'Artiklar som behöver språkvård': 2},
             'inclusion': None,
             'exclusion': stub_re['sv'],
-        },
-    'KÄLLOR': {
-        'categories': ['Alla artiklar som behöver källor', ],
-        'recurseCategories': {},
-        'inclusion': None,
-        'exclusion': None,
-    },
+            },
+        'KÄLLOR': {
+            'categories': ['Alla artiklar som behöver källor', ],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None,
+            },
         'STÄDA': {
             'categories': [],
             'recurseCategories': {'Städa': 2},
             'inclusion': None,
             'exclusion': stub_re['sv'],
-        },
+            },
         'STUBBAR': {
             'categories': [],
             'recurseCategories': {'Stubbar': 5},
             'inclusion': stub_re['sv'],
             'exclusion': r'(Ofullständiga listor)|mallar',
+            },
         },
-    },
-    'r': {
+    'ru': {
         'STUB': {
             'categories': [],
             'recurseCategories': {'Незавершённые статьи по темам':5},
-            'inclusion': stub_re['r'],
+            'inclusion': stub_re['ru'],
             'exclusion': None,
-        },
+            },
         'WIKIFY': {
             'categories': ['Википедия:Статьи к викификации'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'SOURCE': {
             'categories': ['Википедия:Статьи с утверждениями без источников'],
             'recurseCategories': {'Википедия:Статьи с утверждениями без источников':1,
                                   'Википедия:Статьи без ссылок на источники': 1},
             'inclusion': None,
             'exclusion': r'Википедия:Статьи с сомнительной значимостью',
-        },
+            },
         'EXPAND': {
             'categories': ['Википедия:Статьи с незавершёнными разделами'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'ORPHAN': {
             'categories': [],
             'recurseCategories': {'Википедия:Изолированные статьи': 1},
             'inclusion': None,
-            'exclusion': stub_re['r'],
-        },
+            'exclusion': stub_re['ru'],
+            },
         'OBJECTIVITY': {
             'categories': ['Википедия:Статьи, нейтральность которых поставлена под сомнение'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'IMAGES': {
             'categories': ['Википедия:Статьи без иллюстраций'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'CLEANUP': {
             'categories': ['Википедия:Статьи к переработке'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'UPDATE': {
             'categories': ['Википедия:Статьи для обновления'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'TRANSLATE': {
             'categories': [],
             'recurseCategories': {'Википедия:Запросы на перевод': 1},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'RELIABILITY': {
             'categories': ['Википедия:Статьи, достоверность которых требует проверки'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'NOTABILITY': {
             'categories': ['Википедия:Статьи с сомнительной значимостью'],
             'recurseCategories': {'Википедия:Статьи с сомнительной значимостью по давности': 1},
             'inclusion': None,
             'exclusion': None,
+            },
         },
-    },
     'fa': {
         'STYLE': {
             'categories': ['همه مقاله‌های نیازمند ویرایش سبک'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'EXPAND': {
             'categories': ['مقاله‌های نیازمند گسترش'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'MERGE': {
             'categories': ['صفحه‌های نامزد ادغام'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'OBJECTIVITY': {
             'categories': ['همه اختلاف‌ها در بی‌طرفی'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'ORPHAN': {
             'categories': ['مقاله‌های یتیم'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'STUB': {
             'categories': [],
             'recurseCategories': {'رده‌های خرد':
-                                  1},
+                                      1},
             'inclusion': stub_re['fa'],
             'exclusion': None,
-        },
+            },
         'SOURCE': {
             'categories': ['مقاله‌های با منبع ناکافی',
                            'همه مقاله‌های دارای عبارت‌های بدون منبع'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'IMAGES' : {
             'categories': [],
             'recurseCategories' : {'مقاله‌های نیازمند تصویر':
-                                   1},
+                                       1},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'TRANSLATE': {
             'categories': ['مقاله‌های نیازمند اصلاح ترجمه'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'UPDATE': {
             'categories': ['رده:مقاله‌های نیازمند به روز شدن'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
-        },
+            },
         'WIKIFY': {
             'categories': ['مقاله‌های نیازمند به ویکی‌سازی'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
+            },
         },
+    u'fr': {
+        'STUB': {
+            'categories': [],
+            'recurseCategories': {u"Catégorie d'ébauche": 5},
+            'inclusion': stub_re[u"fr"],
+            'exclusion': None,
+            },
+        'UPDATE': {
+            'categories': [u"Article à mettre à jour"],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None,
+            },
+        'ORPHAN': {
+            'categories': [u"Tous les articles orphelins"],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None,
+            },
+        'WIKIFY': {
+            'categories': [u"Article à wikifier/Liste complète"],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None,
+            },
+        'SOURCE': {
+            'categories': [
+                u"Article manquant de référence/Liste complète",
+                u"Article BPV manquant de référence",
+                u"Article pouvant contenir un travail inédit",
+                u"Tous les articles à prouver",
+                ],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None,
+            },
+        'UNENC': {
+            'categories': [u"Rédaction à améliorer"],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None
+            },
+        'VERIFY': {
+            'categories': [],
+            'recurseCategories': {u"Article à vérifier": 2},
+            'inclusion': None,
+            'exclusion': stub_re[u"fr"],
+            },
+        'PROMO': {
+            'categories': [u"Article au ton publicitaire"],
+            'recurseCategories': {},
+            'inclusion': None,
+            'exclusion': None,
+            }
+        }
+    
     }
-}
-
 
 # URL to the Tool Labs webservice used to get quality metadata
 # (num. images, num. wikilinks, num. broken wikilinks) for articles
-qualws_url = r'http://tools.wmflabs.org/suggestbot/quality_metadata'
+qualws_url = 'https://tools.wmflabs.org/suggestbot/quality_metadata'
 
 # URL to the Tool Labs webservice to get link-based recommendations
-linkrec_url = "http://tools.wmflabs.org/suggestbot/link_recommender"
+linkrec_url = "https://tools.wmflabs.org/suggestbot/link_recommender"
 
 # Variables that control how we handle regulars, and store them
 # in the suggestbot database.
@@ -534,63 +598,26 @@ rc_pickle = "../data/recentchanges-updatetitles-{0}.dat"
 # Number of days we keep revisions for, for each language
 rc_keep = {
     'en': 90,
-    'r': 274,
+    'ru': 274,
     'sv': 925,
     'pt': 720,
     'no': 1461,
     'fa': 1461,
-    'h': 1461
-}
-
-# Configuration of text tables used to store data
-text_table = {
-    'en': 'enwiki_solr_text',
-    'sv': 'svwiki_solr_text',
-    'no': 'nowiki_solr_text',
-    'pt': 'ptwiki_solr_text',
-    'fa': 'fawiki_solr_text',
-    'h': 'huwiki_solr_text',
-    'r': 'ruwiki_solr_text',
+    'hu': 1461,
+    'fr': 365,
 }
 
 # Configuration of database tables used to store revision data
 # (used by the co-edit recommender)
-# NOTE: this duplicates $COEDIT_TABLES in config.pm
 revision_table = {
     'en': 'enwiki_revisions',
     'no': 'nowiki_revisions',
     'sv': 'svwiki_revisions',
     'pt': 'ptwiki_revisions',
     'fa': 'fawiki_revisions',
-    'r': 'ruwiki_revisions',
-    'h': 'huwiki_revisions'
-}
-
-# Configuration of URLs to query each language's Solr backend,
-# Page ID is substituted in at runtime.
-# NOTE: we currently have separate URLs for each language to allow
-# tweaking of parameters like minimum term frequency in the source document (mintf),
-# minimum document frequency (mindf), and minimum word length (minwl)
-solr_baseurl = {
-    'en': "http://localhost:8080/solr/English/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'no': "http://localhost:8080/solr/Norwegian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'sv': "http://localhost:8080/solr/Swedish/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'pt': "http://localhost:8080/solr/Portuguese/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'fa': "http://localhost:8080/solr/Persian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'h': "http://localhost:8080/solr/Hungarian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-    'r': "http://localhost:8080/solr/Russian/mlt?q=id:{pageid}&mlt.fl=text&mlt.mindf=2&mlt.mintf=2&fl=id,titleText,score&mlt.match.include=false&rows=1000&mlt.minwl=5&wt=json",
-}
-
-# Mapping language codes to URLs used to delete pages from Solr's
-# search index
-solr_delurl = {
-    'en': 'http://localhost:8080/solr/English/update/json',
-    'no': 'http://localhost:8080/solr/Norwegian/update/json',
-    'sv': 'http://localhost:8080/solr/Swedish/update/json',
-    'pt': 'http://localhost:8080/solr/Portuguese/update/json',
-    'fa': 'http://localhost:8080/solr/Persian/update/json',
-    'h': 'http://localhost:8080/solr/Hungarian/update/json',
-    'r': 'http://localhost:8080/solr/Russian/update/json',
+    'ru': 'ruwiki_revisions',
+    'hu': 'huwiki_revisions',
+    'fr': 'frwiki_revisions',
 }
 
 # Configuration of what templates to use.  Complete title
@@ -626,38 +653,44 @@ templates = {
         'request': 'Usuário(a):SuggestBot/Templates/Requests',
         'regulars': 'Usuário(a):SuggestBot/Templates/Regulars',
     },
-    'r': {
+    'ru': {
         'request': 'Участник:SuggestBot/Шаблоны/Запросы',
         'regulars': 'Участник:SuggestBot/Шаблоны/Регулярные',
     },
     'fa': {
         'request': 'کاربر:SuggestBot/Templates/Requests',
         'regulars': 'کاربر:SuggestBot/Templates/Regulars',
+    },
+    'fr': {
+        'request': 'Utilisateur:SuggestBot/Modèles/Requêtes',
+        'regulars': 'Utilisateur:SuggestBot/Modèles/Souscriptions',
+        }
     }
-}
 
 # Templates added by our regular users.
 config_templare = {
     'en': { 'config': 'User:SuggestBot/config',
-             'userbox': 'User:SuggestBot/userbox', },
+            'userbox': 'User:SuggestBot/userbox', },
     'no': { 'config': 'Bruker:AnbefalingsBot/konfigurasjon',
-             'userbox': 'Bruker:AnbefalingsBot/brukerboks', },
+            'userbox': 'Bruker:AnbefalingsBot/brukerboks', },
     'sv': { 'config': 'Användare:FörslagsBot/konfiguration',
-             'userbox': 'Användare:FörslagsBot/användarruta', },
+            'userbox': 'Användare:FörslagsBot/användarruta', },
     'pt': { 'config': 'Usuário(a):SuggestBot/config',
-             'userbox': 'Usuário(a):SuggestBot/userbox', },
-    'r': { 'config': 'Участник:SuggestBot/Настройка',
-             'userbox': 'Участник:SuggestBot/userbox',
-         },
-    'fa': {
-        'config': 'کاربر:SuggestBot/config',
-        'userbox': 'کاربر:SuggestBot/userbox',
+            'userbox': 'Usuário(a):SuggestBot/userbox', },
+    'ru': { 'config': 'Участник:SuggestBot/Настройка',
+           'userbox': 'Участник:SuggestBot/userbox',
+           },
+    'fa': { 'config': 'کاربر:SuggestBot/config',
+            'userbox': 'کاربر:SuggestBot/userbox',
+            },
+    'fr': { 'config': 'Utilisateur:SuggestBot/config',
+            'userbox': 'Utilisateur:SuggestBot/Boîte utilisateur',
+            }
     }
-}
 
 # Which references we'll ignore when looking for backlinks
 # when processing the regular user templates.
-templater_stoplist = {
+template_stoplist = {
     'en': ['User:SuggestBot/config',
            'User:SuggestBot/Getting Recommendations Regularly', ],
     'no': ['Bruker:AnbefalingsBot/konfigurasjon',
@@ -667,11 +700,13 @@ templater_stoplist = {
     'pt': [ 'Usuário(a):SuggestBot/config',
             'Usuário(a):SuggestBot/Getting suggestions regularly',
             'Usuário(a):SuggestBot/Obtendo sugestões regularmente'],
-    'r': [ 'Участник:SuggestBot/Настройка',
+    'ru': [ 'Участник:SuggestBot/Настройка',
             'Участник:SuggestBot/Регулярные рекомендации' ],
-    'fa': [ 'کاربر:SuggestBot/config',
-            'کاربر:SuggestBot/Getting suggestions regularly', ]
-}
+    'fr': [ 'Utilisateur:SuggestBot/config',
+            'Utilisateur:SuggestBot/Souscrire'],
+    'fa': [u'کاربر:SuggestBot/config',
+           u'کاربر:SuggestBot/Getting suggestions regularly', ],
+    }
 
 # Request templates used in the WP:Teahouse experiment
 teahouse_templates = {
@@ -680,9 +715,10 @@ teahouse_templates = {
     'no': [],
     'pt': [],
     'fa': [],
-    'r': [],
-    'h': []
-}
+    'ru': [],
+    'hu': [],
+    'fr': [],
+    }
 
 # Templates used for one-time requests.
 # Outermost dictionary maps language codes to template configurations
@@ -703,15 +739,18 @@ request_template = {
             [],
             'User:SuggestBot/suggest': [],
         },
-    'r': { 'Участник:SuggestBot/suggest': [],
+    'ru': { 'Участник:SuggestBot/suggest': [],
              'User:SuggestBot/suggest': [],
          },
     'fa': { 'کاربر:SuggestBot/suggest':
              ['ربات پیشنهاددهنده'],
              'User:SuggestBot/suggest':
              ['ربات پیشنهاددهنده'],
-         }
-}
+         },
+    'fr': { 'Utilisateur:SuggestBot/suggest':
+                ['User:SuggestBot/suggest'],
+            }
+    }
 
 # Regular expressions used to match the section heading of requests
 # associated with the WP:Teahouse experiment (maybe also elsewhere).
@@ -723,9 +762,10 @@ request_head_re = {
     'sv': ["[=]{1,3}\s*.*, dina förslag är på väg.*\s*[=]{1,3}"],
     'pt': [],
     'fa': [],
-    'r': [],
-    'h': []
-}
+    'ru': [],
+    'hu': [],
+    'fr': [],
+    }
 
 # Name of the category parameter used in Teahouse suggestions,
 # users copy & paste WikiProject names into these
@@ -735,9 +775,10 @@ th_category = {
     'sv': 'kategori',
     'pt': '',
     'fa': '',
-    'r': '',
-    'h': ''
-}
+    'ru': '',
+    'hu': '',
+    'fr': '',
+    }
 
 # Suffix used in category names to match WikiProject category names,
 # e.g. on enwiki we must add ' articles' to match it correctly.
@@ -747,9 +788,10 @@ wikiproject_suffix = {
     'sv': '',
     'pt': '',
     'fa': '',
-    'r': '',
-    'h': ''
-}
+    'ru': '',
+    'hu': '',
+    'fr': '',
+    }
 
 ## WikiProject suggestion request parameters
 
@@ -797,9 +839,10 @@ empty_placeholder = {
     'sv': '<!-- Fyllkommentar från FörslagsBot, kan tas bort vid behov -->',
     'pt': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
     'fa': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
-    'r': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
-    'h': ''
-}
+    'ru': '<!-- Empty placeholder left by SuggestBot, feel free to delete -->',
+    'hu': '',
+    'fr': '<!-- Espace vide ajouté par SuggestBot, peut être enlevé -->',
+    }
 
 # Base-filename of file to store names of users where the configuration
 # didn't parse correctly.
@@ -830,7 +873,7 @@ template_parameters = {
         'substituir': 'replace',
         'nível': 'headlevel',
     },
-    'r': {
+    'ru': {
         'частота': 'frequency',
         'заменять': 'replace',
         'уровень': 'headlevel',
@@ -839,8 +882,13 @@ template_parameters = {
         'frequency': 'frequency',
         'replace': 'replace',
         'level': 'headlevel',
+    },
+    'fr': {
+        'fréquence': 'frequency',
+        'remplacement': 'replace',
+        'level': 'headlevel',
+        }
     }
-}
 
 # Regular expressions for matching desired frequency of recommendations.
 # Keys are language codes, values are the regular expression used for
@@ -850,26 +898,29 @@ once_monthly = {
     'no': r"en gang i måneden",
     'sv': r"en gång i månaden",
     'pt': r"mensalmente|uma vez por mês",
-    'r': r"ежемесячно|раз в месяц",
+    'ru': r"ежемесячно|раз в месяц",
     'fa': r'monthly|once a month',
-}
+    'fr': r'mensuelle',
+    }
 twice_monthly = {
     'en': r"twice a month|(every|once (a|every)) (fortnight|two weeks)",
     'no': r"to ganger i måneden|annenhver uke",
     'sv': r"två gånger i månaden",
     'pt': r"quinzenalmente|duas vezes por mês",
-    'r': r"дважды в месяц",
+    'ru': r"дважды в месяц",
     'fa': r'twice a month|every two weeks',
-}
+    'fr': r'bimensuelle',
+    }
 weekly = {
     # NOTE: we're allowing users to specify getting them daily, but serve them weekly
     'en': r"(once a|twice a|every) (week|day)|weekly|daily",
     'no': r"en gang i uken",
     'sv': r"en gång i veckan",
     'pt': r"uma vez por semana|semanalmente",
-    'r': r"еженедельно|раз в неделю",
+    'ru': r"еженедельно|раз в неделю",
     'fa': r'(once a|every) week|weekly',
-}
+    'fr': r'hebdomadaire',
+    }
 
 # Dictionary holding the text of the header of the SuggestBot
 # post in each language we understand.  When replacing recommendations,
@@ -879,18 +930,20 @@ rec_headers = {
     'no': '== Artikler du med glede kan redigere, fra AnbefalingsBot ==',
     'sv': '== Artiklar du kanske vill redigera, från FörslagsBot ==',
     'pt': '== Artigos que você gostaria de editar, de SuggestBot ==',
-    'r': '== Статьи, которые Вам возможно захочется исправить, от SuggestBot ==',
+    'ru': '== Статьи, которые Вам возможно захочется исправить, от SuggestBot ==',
     'fa': '== مقاله‌های پیشنهادی توسط ربات پیشنهاددهنده ==',
-}
+    'fr': '== SuggestBot vous propose… =='
+    }
 
 rec_header_re = {
     'en': 'Articles you might like to edit, from SuggestBot',
     'no': 'Artikler du med glede kan redigere, fra AnbefalingsBot',
     'sv': 'Artiklar du kanske vill redigera, från FörslagsBot',
     'pt': 'Artigos que você gostaria de editar, de SuggestBot',
-    'r': 'Статьи, которые Вам возможно захочется исправить, от SuggestBot',
+    'ru': 'Статьи, которые Вам возможно захочется исправить, от SuggestBot',
     'fa': 'مقاله‌های پیشنهادی توسط ربات پیشنهاددهنده',
-}
+    'fr': u'SuggestBot vous propose…'
+    }
 
 # Dictionarly holding lists of titles of subsections of SuggestBot's
 # post.  We will also delete the contents of these sub-headers if
@@ -901,9 +954,10 @@ sub_header_re = {
     'sv': [],
     'pt': [],
     'fa': [],
-    'r': [],
-    'h': []
-}
+    'ru': [],
+    'hu': [],
+    'fr': []
+    }
 
 # Regular expressions to match a Yes/No parameter value in
 # all languages we speak.  Matching is done case-insensitively.
@@ -912,17 +966,19 @@ re_yes = {
     'no': r'\s*ja\s*',
     'sv': r'\s*ja\s*',
     'pt': r'\s*sim\s*',
-    'r': r'\s*да\s*',
+    'ru': r'\s*да\s*',
     'fa': r'\s*yes\s*',
-}
+    'fr': r'\s*(oui|accepter)\s*',
+    }
 re_no = {
     'en': r'\s*no\s*',
     'no': r'\s*nei\s*',
     'sv': r'\s*nej\s*',
     'pt': r'\s*não\s*',
-    'r': r'\s*нет\s*',
+    'ru': r'\s*нет\s*',
     'fa': r'\s*no\s*',
-}
+    'fr': r'\s*(non|refuser)\s*',
+    }
 
 ## Regular expressions to match list-articles in the given language
 ## (should be in sync with the same in toolserver/links-server-*.py)
@@ -931,10 +987,11 @@ list_re = {
     'no': r'[Ll]iste[ _]over[ _]',
     'sv': r'[Ll]ista[ _]över[ _]',
     'pt': r'[Ll]ista[ _]de[ _]',
-    'h': r'[ _]listája$',
+    'hu': r'[ _]listája$',
     'fa': r'^فهرست',
-    'r': r'(^Список|(:Алфавитный[ _]|Хронологический[ _])список)|—[ _]список'
-}
+    'ru': r'(^Список|(:Алфавитный[ _]|Хронологический[ _])список)|—[ _]список',
+    'fr': r"[Ll]iste[ _]d[e']",
+    }
 
 # P-value cutoffs for determining if an article-specific task suggestion
 # is a "yes" or a "maybe"
