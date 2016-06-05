@@ -3,10 +3,7 @@
 '''
 Library for connecting to the SuggestBot database.
 
-Expects you to already have a SuggestBotConfig object loaded,
-so it can read the database configuration parameters from it.
-
-Copyright (C) 2005-2013 SuggestBot Dev Group
+Copyright (C) 2005-2016 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -38,9 +35,9 @@ class SuggestBotDatabase:
         """
         Instantiate an object of this class.
 
-        @param default_file: path to the MySQL configuration file,
+        :param default_file: path to the MySQL configuration file,
                              relative to the SuggestBot installation directory
-        @type default_file: str
+        :type default_file: str
         """
 
         self.default_file = os.path.join(os.environ['SUGGESTBOT_DIR'], default_file)

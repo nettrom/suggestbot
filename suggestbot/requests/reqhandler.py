@@ -65,8 +65,8 @@ class DBConnectionError(Exception):
     pass;
 
 class RequestTemplateHandler:
-    def __init__(self, lang=u'en',
-                 templates={u"User:SuggestBot/suggest": []},
+    def __init__(self, lang='en',
+                 templates={"User:SuggestBot/suggest": []},
                  ignoreList=[], verbose=False):
         """
         Initialise an object that will handle one-time requests that are added to
@@ -95,7 +95,7 @@ class RequestTemplateHandler:
         # For each defined template, create a set of templates unicode strings
         # we'll be looking for.
         self.template_pages = {}
-        for (template, synonyms) in self.templates.iteritems():
+        for (template, synonyms) in self.templates.items():
             self.template_pages[template] = set([template.lower()] + [s.lower() for s in synonyms])
 
         self.ignoreList = ignoreList
@@ -129,11 +129,11 @@ class RequestTemplateHandler:
         # Set up a signal handler for SIGUSR1
         signal.signal(signal.SIGUSR1, self.handleSignal);
 
-        logging.info(u"OK, ready to run for as long as possible... running".encode('utf-8'));
+        logging.info("OK, ready to run for as long as possible... running".encode('utf-8'));
         
         while not self.shutdown:
             startTime = datetime.utcnow()
-            # print(u'It is {timestamp}, checking {lang}-wiki'.format(timestamp=startTime.strftime('%Y-%m-%d %H:%M:%S'), lang=self.lang))
+            # print('It is {timestamp}, checking {lang}-wiki'.format(timestamp=startTime.strftime('%Y-%m-%d %H:%M:%S'), lang=self.lang))
 
             try:
                 if not self.db.connect():
@@ -142,7 +142,7 @@ class RequestTemplateHandler:
                 # object around for too long
                 self.site = pywikibot.Site(self.lang)
                 recRequests = self.getRequests()
-                for (page, pageData) in recRequests.iteritems():
+                for (page, pageData) in recRequests.items():
                     self.processSingleRequest(userPage=page,
                                               interestPages=pageData['articles'],
                                               knownTemplates=pageData['templates'],
@@ -150,13 +150,13 @@ class RequestTemplateHandler:
                 if not self.db.disconnect():
                     raise DBConnectionError
             except pywikibot.data.api.TimeoutError:
-                logging.warning(u"API TimeoutError occurred, will try again after sleeping")
+                logging.warning("API TimeoutError occurred, will try again after sleeping")
                 startTime = datetime.utcnow() # reset the clock so we'll sleep for a while
             except request.RequestUpdateError:
-                logging.warning(u"Error when updating data for a request in the database")
+                logging.warning("Error when updating data for a request in the database")
                 startTime = datetime.utcnow() # reset the clock so we'll sleep for a while
             except DBConnectionError:
-                logging.error(u"failed to (dis)connect the database")
+                logging.error("failed to (dis)connect the database")
                 startTime = datetime.utcnow() # reset the clock so we'll sleep for a while
 
             timeDiff = datetime.utcnow() - startTime
@@ -181,8 +181,8 @@ class RequestTemplateHandler:
 
         # Regular expression to match parameters on the form "category1= ..."
         # and so on, localised to the language we're talking
-        catparam_regex = re.compile(ur"\s*{catparam}\d*=".format(
-                catparam=config.th_category[self.lang]), re.I)
+        catparam_regex = re.compile(r"\s*{catparam}\d*=".format(
+            catparam=config.th_category[self.lang]), re.I)
 
         # Suffix to use when using categories to fetch pages of interest
         catname_suffix = config.wikiproject_suffix[self.lang]
@@ -203,7 +203,7 @@ class RequestTemplateHandler:
             
             # Support category suffixes by adding that as well
             if catname_suffix:
-                listed_titles.add(u'{param}{suffix}'.format(
+                listed_titles.add('{param}{suffix}'.format(
                         param=parameter, 
                         suffix=catname_suffix))
         else:
@@ -216,17 +216,17 @@ class RequestTemplateHandler:
                                                   site=self.site)
             for seedpage in seed_pages:
                 if not seedpage.exists():
-                    logging.warning(u"listed {page} does not exist".format(page=seedpage.title()))
+                    logging.warning("listed {page} does not exist".format(page=seedpage.title()))
                     continue
 
                 if not seedpage.isCategory():
                     if seedpage.namespace() != 0:
-                        logging.warning(u"listed page {page} not in ns 0".format(page=seedpage.title()))
+                        logging.warning("listed page {page} not in ns 0".format(page=seedpage.title()))
                     elif seedpage.isRedirectPage():
                         try:
                             found_articles.add(seedpage.getRedirectTarget())
                         except pywikibot.exceptions.NoPage:
-                            logging.warning(u"listed {page} redirects to a non-existent page".format(page=seedpage.title()))
+                            logging.warning("listed {page} redirects to a non-existent page".format(page=seedpage.title()))
                     else:
                         # Everything looks OK, add the page
                         found_articles.add(seedpage);
@@ -241,7 +241,7 @@ class RequestTemplateHandler:
                         try:
                             seedpage = seedpage.getCategoryRedirectTarget()
                         except pywikibot.exceptions.NoPage:
-                            logging.warning(u"listed {title} redirects to a non-existent category".format(title=seedpage.title()))
+                            logging.warning("listed {title} redirects to a non-existent category".format(title=seedpage.title()))
                             continue # skip this category
 
                     cat_articles = set();
@@ -259,10 +259,42 @@ class RequestTemplateHandler:
                     # Add the category's articles to our result
                     found_articles = found_articles.union(cat_articles)
         except pywikibot.Error:
-            logging.warning(u"Failed to instantiate and iterate over list generator, or something else went wrong")
+            logging.warning("Failed to instantiate and iterate over list generator, or something else went wrong")
 
         # okay, done
         return found_articles
+
+    def get_category_pages(self, cat_page):
+        '''
+        Grab up to 128 articles from the given category and return them as a set.
+        If the category contains talk pages, the corresponding articles are added
+        instead.  The category will be traversed in reverse chronological order
+        by setting the `cmsort` parameter to `timestamp`, ref
+        https://www.mediawiki.org/wiki/API:Categorymembers
+        '''
+
+        cat_articles = set()
+        if cat_page.isCategoryRedirect():
+            try:
+                cat_page = cat_page.getCategoryRedirectTarget()
+            except pywikibot.exceptions.NoPage:
+                logging.warning("listed {title} redirects to a non-existent category".format(title=seedpage.title()))
+                return cat_articles
+
+        ## Grab category members from Main and Talk, reverse sort by
+        ## timestamp, a max of 128 pages.
+        for catmember in self.site.categorymembers(cat_page,
+                                                   namespaces=[0,1],
+                                                   sortby="timestamp",
+                                                   reverse=True,
+                                                   total=128):
+            if catmember.namespace() == 0:
+                cat_articles.add(catmember)
+            else:
+                cat_articles.add(catmember.toggleTalkPage())
+
+        # ok, done
+        return(cat_articles)
 
     def getRequests(self):
         """
@@ -276,14 +308,14 @@ class RequestTemplateHandler:
 
         # Regular expression to match parameters on the form "category1= ..."
         # and so on, localised to the language we're talking
-        catParamRegex = re.compile(ur"\s*{catparam}\d*=".format(
+        catParamRegex = re.compile(r"\s*{catparam}\d*=".format(
             catparam=config.th_category[self.lang]), re.I)
 
         # Suffix to use when using categories to fetch pages of interest
         catname_suffix = config.wikiproject_suffix[self.lang]
 
         # for each template we know about...
-        for (temp_title, alltitles_set) in self.template_pages.iteritems():
+        for (temp_title, alltitles_set) in self.template_pages.items():
             # iterate through all pages that transclude the template
             # (limited to User and User talk namespaces)
             template = pywikibot.Page(self.site, temp_title)
@@ -294,10 +326,10 @@ class RequestTemplateHandler:
 
                 # If the page is locked, SuggestBot can't edit, so skip it
                 if not page.canBeEdited():
-                    logging.info(u'cannot edit {0} (page locked?), skipping'.format(page.title()))
+                    logging.info('cannot edit {0} (page locked?), skipping'.format(page.title()))
                     continue
 
-                logging.info(u"now processing request on page {page} ...".format(page=page.title()).encode('utf-8'));
+                logging.info("now processing request on page {page} ...".format(page=page.title()).encode('utf-8'));
 
                 # Articles the user has listed, and templates we know about
                 listedArticles = set();
@@ -327,7 +359,7 @@ class RequestTemplateHandler:
 
         return requests;
                 
-    def removeTemplateFromSource(self, sourceText=u"",
+    def removeTemplateFromSource(self, sourceText="",
                                  knownTemplates=[]):
         """
         Return a version of the source wikitext, with the known
@@ -408,10 +440,10 @@ class RequestTemplateHandler:
         """
         # 1: determine the username, and figure out where we're sending recs
         # (code is similar to the one handling regular users in SuggestBot.py)
-        logging.info(u"processing request from page {page}".format(page=userPage.title()).encode('utf-8'));
+        logging.info("processing request from page {page}".format(page=userPage.title()).encode('utf-8'));
 
         # Regular expression for splitting into username + subpage-name.
-        subPageSplitRe = re.compile(ur'(?P<username>[^/]+)(?P<subname>/.*)');
+        subPageSplitRe = re.compile(r'(?P<username>[^/]+)(?P<subname>/.*)');
 
         pageTitle = userPage.title(withNamespace=False, withSection=False);
         # split the pageTitle on first "/" in case it's a subpage.
@@ -423,7 +455,7 @@ class RequestTemplateHandler:
             subPageTitle = userPage.title();
             username = matchObj.group('username');
 
-            logging.info(u"found subpage {title} of user {username}".format(title=matchObj.group('subname'), username=username).encode('utf-8'));
+            logging.info("found subpage {title} of user {username}".format(title=matchObj.group('subname'), username=username).encode('utf-8'));
         else:
             username = pageTitle;
 
@@ -434,7 +466,7 @@ class RequestTemplateHandler:
         # We'll see how much of a problem blocked users and users adding them not being
         # themselves, and then consider simply deleting it.
         if recUser.isBlocked():
-            logging.warning(u"User:{username} is blocked, posting aborted".format(username=recUser.username).encode('utf-8'));
+            logging.warning("User:{username} is blocked, posting aborted".format(username=recUser.username).encode('utf-8'));
             return False;
 
         # check the page history to find the first revision with the template,
@@ -445,8 +477,8 @@ class RequestTemplateHandler:
 
         maxRevs = 25;
         numSeenRevs = 0; # number of revisions we inspected
-        prevRevisionText = u""; # default previous revision is empty
-        prevRevisionUser = u""; # name of the user who potentially added the template
+        prevRevisionText = ""; # default previous revision is empty
+        prevRevisionUser = ""; # name of the user who potentially added the template
         
         # Switch to lowercase for case-insensitive matching
         knownTemplateTitles = set([temp.lower() \
@@ -467,10 +499,10 @@ class RequestTemplateHandler:
             try:
                 revText = userPage.getOldVersion(revId);
             except:
-                logging.warning(u"unable to fetch revision ID {0}".format(revId));
+                logging.warning("unable to fetch revision ID {0}".format(revId));
                 continue;
 
-            logging.info(u'got text of revision {0}'.format(revId))
+            logging.info('got text of revision {0}'.format(revId))
 
             # If we do not have data already, populate and continue
             if not prevRevisionText:
@@ -482,11 +514,11 @@ class RequestTemplateHandler:
                                          prevRevisionText.splitlines());
 
             # Build a string of lines from the diff
-            diffString = u"";
+            diffString = "";
             for line in revDiff:
-                if re.match(ur'[+]\s+', line):
-                    diffString = u"{diff}{line}\n".format(diff=diffString,
-                                                          line=re.sub(ur'[+]\s+', "", line));
+                if re.match(r'[+]\s+', line):
+                    diffString = "{diff}{line}\n".format(diff=diffString,
+                                                         line=re.sub(r'[+]\s+', "", line));
 
             # Parse the diff string and filter templates
             parsedCode = mwp.parse(diffString);
@@ -504,15 +536,15 @@ class RequestTemplateHandler:
                         templateAdded = True;
 
             if templateAdded:
-                logging.info(u'template was added in revision {0}'.format(revId))
+                logging.info('template was added in revision {0}'.format(revId))
                 if prevRevisionUser == recUser.username:
                     # we've got a valid addition
                     selfAddedTemplate = True;
                     templateAddedRevision = revId;
-                    logging.info(u"user {username} added the template themselves".format(username=recUser.username).encode('utf-8'));
+                    logging.info("user {username} added the template themselves".format(username=recUser.username).encode('utf-8'));
                 else:
                     selfAddedTemplate = False;
-                    logging.info(u"user {username} did not add the template themselves, instead added by {revUser}".format(username=recUser.username, revUser=prevRevisionUser).encode('utf-8'));
+                    logging.info("user {username} did not add the template themselves, instead added by {revUser}".format(username=recUser.username, revUser=prevRevisionUser).encode('utf-8'));
                 
                 # either way, we found the most recent addition of the template,
                 # our job is done...
@@ -545,12 +577,12 @@ class RequestTemplateHandler:
                     if revUser == recUser.username:
                         selfAddedTemplate = True;
                         templateAddedRevision = revId;
-                        logging.info(u"inspected first revision, user {username} added the template themselves".format(username=recUser.username).encode('utf-8'));
+                        logging.info("inspected first revision, user {username} added the template themselves".format(username=recUser.username).encode('utf-8'));
                     else:
-                        logging.info(u"inspected first revision, user {username} did not add the template themselves, instead added by {revUser}".format(username=recUser.username, revUser=prevRevisionUser).encode('utf-8'));
-            except pywikibot.Error, e:
-                logging.warning(u"unable to fetch revision ID {0}".format(revId));
-                logging.warning(u"Error: {0}\n".format(e.args[0]));
+                        logging.info("inspected first revision, user {username} did not add the template themselves, instead added by {revUser}".format(username=recUser.username, revUser=prevRevisionUser).encode('utf-8'));
+            except pywikibot.Error as e:
+                logging.warning("unable to fetch revision ID {0}".format(revId));
+                logging.warning("Error: {0}\n".format(e.args[0]));
 
         # This should now reflect whether we could determine if the template was added...
         if not selfAddedTemplate:
@@ -570,7 +602,7 @@ class RequestTemplateHandler:
         try:
             recRequest.updateDatabase();
         except request.RequestUpdateError:
-            logging.error(u"could not add the request info to the database, unable to continue");
+            logging.error("could not add the request info to the database, unable to continue");
             return False;
 
         # Instantiate the page object.  This also solves the problem of a user putting
@@ -595,13 +627,13 @@ class RequestTemplateHandler:
 
         if not 'recs' in userRecs \
                 or not userRecs['recs']:
-            logging.warning(u"got no recommendations for {username}".format(username=username).encode('utf-8'));
+            logging.warning("got no recommendations for {username}".format(username=username).encode('utf-8'));
             return False;
         # 3.1: if we get recommendations back... create full template substitution text...
         recMsg = bot.createRecsPage(userRecs['recs']);
         # check again if the user is blocked...
         if recUser.isBlocked():
-            logging.warning(u"User:{username} is blocked, posting aborted".format(recUser.username()).encode('utf-8'));
+            logging.warning("User:{username} is blocked, posting aborted".format(recUser.username()).encode('utf-8'));
             return False;
 
         # Source text of the page we post suggestions to.
@@ -610,10 +642,10 @@ class RequestTemplateHandler:
         try:
             destPageSource = destPage.get();
         except pywikibot.exceptions.NoPage:
-            logging.warning(u"destination page {title} doesn't exist, will be created".format(title=destPage.title()).encode('utf-8'));
+            logging.warning("destination page {title} doesn't exist, will be created".format(title=destPage.title()).encode('utf-8'));
             destPageSource = "";
         except pywikibot.exceptions.IsRedirectPage:
-            logging.warning(u"destination page {title} is a redirect, posting cancelled".format(title=destPage.title()).encode('utf-8'));
+            logging.warning("destination page {title} is a redirect, posting cancelled".format(title=destPage.title()).encode('utf-8'));
             return False;
 
         # Attempt to remove the template from the source, if it's not found
@@ -622,7 +654,7 @@ class RequestTemplateHandler:
                                                        knownTemplates=knownTemplateTitles);
         #   3.3: add the recommendations to the end of the page,
         #        but strip any remaining leading/trailing whitespace.
-        destPageSource = u"{source}\n\n{recs}".format(source=destPageSource, recs=recMsg).strip();
+        destPageSource = "{source}\n\n{recs}".format(source=destPageSource, recs=recMsg).strip();
 
         #   3.4: save the new page
         try:
@@ -643,10 +675,10 @@ class RequestTemplateHandler:
             try:
                 userPageSource = userPage.get();
             except pywikibot.exceptions.NoPage:
-                logging.warning(u"user page {title} has stopped existing, aborting".format(title=destPage.title()).encode('utf-8'));
+                logging.warning("user page {title} has stopped existing, aborting".format(title=destPage.title()).encode('utf-8'));
                 return False;
             except pywikibot.exceptions.IsRedirectPage:
-                logging.warning(u"user page {title} is a redirect, aborting".format(title=destPage.title()).encode('utf-8'));
+                logging.warning("user page {title} is a redirect, aborting".format(title=destPage.title()).encode('utf-8'));
                 return False;
 
             # FIXME: test this part, it seems to malfunction!
@@ -669,15 +701,15 @@ class RequestTemplateHandler:
                     userPage.text = newUserPageSource;
                     userPage.save(comment=config.replace_comment[self.lang],
                                   watch=False, minor=True, force=True);
-                    # sys.stderr.write(u"Info: New user page source: {0}".format(newUserPageSource).encode('utf-8'));
-                    # sys.stderr.write(u"Info: user page with removed template would have been saved at this point\n");
+                    # sys.stderr.write("Info: New user page source: {0}".format(newUserPageSource).encode('utf-8'));
+                    # sys.stderr.write("Info: user page with removed template would have been saved at this point\n");
                 except pywikibot.exceptions.EditConflict:
                     # FIXME: if this happens, fetch the page source again and make the edit,
                     # since that should resolve the edit conflict.
-                    logging.error(u"removing template from {title} failed, edit conflict".format(title=destPage.title()).encode('utf-8'));
+                    logging.error("removing template from {title} failed, edit conflict".format(title=destPage.title()).encode('utf-8'));
                     return False;
                 except pywikibot.exceptions.PageNotSaved as e:
-                    logging.error(u"removing template from {title} failed.\nError: {etext}".format(title=destPage.title(), etext=e).encode('utf-8'));
+                    logging.error("removing template from {title} failed.\nError: {etext}".format(title=destPage.title(), etext=e).encode('utf-8'));
                     return False;
 
         # OK, we've posted suggestions, add the recs to the request object,
@@ -685,13 +717,13 @@ class RequestTemplateHandler:
         try:
             recRequest.setRecs(recs=userRecs['recs']);
             recRequest.setEndtime(newEndtime=datetime.utcnow());
-            recRequest.setStatus(u'completed');
+            recRequest.setStatus('completed');
             recRequest.updateDatabase();
         except request.RequestUpdateError:
-            logging.error(u"failed to update data for request {reqid}".format(reqid=recRequest.getId()));
+            logging.error("failed to update data for request {reqid}".format(reqid=recRequest.getId()));
             return False;
 
-        logging.info(u"all done!\n");
+        logging.info("all done!\n");
         # ok, everything went well, done
         return True;
 
@@ -700,35 +732,35 @@ def main():
     Run some tests.
     """
     # dict mapping a template to its synonyms
-    templates = {u"User:SuggestBot/suggest":
-                 [u"User:SuggestBot/th-suggest",
-                  u"User:Jtmorgan/sandbox/2"]};
+    templates = {"User:SuggestBot/suggest":
+                 ["User:SuggestBot/th-suggest",
+                  "User:Jtmorgan/sandbox/2"]};
 
     myHandler = RequestTemplateHandler(verbose=True,
                                        templates=templates);
     myBot = SuggestBot(lang=myHandler.lang);
 
-    logging.info(u"instantiated RequestTemplateHandler and SuggestBot objects, testing request handling...");
+    logging.info("instantiated RequestTemplateHandler and SuggestBot objects, testing request handling...");
 
     try:
         recRequests = myHandler.getRequests();
-        for (page, pageData) in recRequests.iteritems():
-            logging.info(u"Found the following templates on page {page}:".format(page=page.title()).encode('utf-8'))
+        for (page, pageData) in recRequests.items():
+            logging.info("Found the following templates on page {page}:".format(page=page.title()).encode('utf-8'))
 
             for template in pageData['templates']:
-                logging.info(u"- {template}".format(template=template.title()).encode('utf-8'))
+                logging.info("- {template}".format(template=template.title()).encode('utf-8'))
 
             logging.info("\nIn the templates were listed the following articles:")
 
             for intPage in pageData['articles']:
-                logging.info(u"- {page}".format(page=intPage.title()).encode('utf-8'))
+                logging.info("- {page}".format(page=intPage.title()).encode('utf-8'))
             logging.info("")
 
         # Uncomment when doing live testing...
         if not myHandler.db.connect():
             logging.error("unable to connect to database");
         else:
-            for (page, pageData) in recRequests.iteritems():
+            for (page, pageData) in recRequests.items():
                 myHandler.processSingleRequest(userPage=page,
                                                interestPages=pageData['articles'],
                                                knownTemplates=pageData['templates'],

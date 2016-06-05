@@ -1,0 +1,27 @@
+# Screen configuration file to launch SuggestBot's servers
+# automatically, with one shell for each server.
+
+# start with screen -c bin/suggestbot.screenrc
+
+# Name this session for easy re-attachment later
+sessionname suggestbot
+
+termcapinfo xterm* ti@:te@
+startup_message off
+vbell off
+autodetach on
+altscreen on
+shelltitle "$ |bash"
+defscrollback 1000
+defutf8 on
+nonblock on
+
+hardstatus alwayslastline
+hardstatus string '%{= kw}[ %{r}%l%{w} ] [ %-w%{= BW}%50>%n%f* %t%{-}%+w%< ]'
+
+screen -t editserv bin/edit-server.sh
+screen -t textrec bin/text-recommender.sh
+screen -t coeditrec bin/coedit-recommender.sh
+screen -t recserv bin/rec-server.sh
+screen -t filterserv bin/filter-server.sh
+screen -t cmdline bash
