@@ -339,6 +339,10 @@ tasks = {
             'exclusion': r'(Ofullständiga listor)|mallar',
             },
         },
+<<<<<<< HEAD
+=======
+    },
+>>>>>>> master
     'ru': {
         'STUB': {
             'categories': [],
@@ -607,6 +611,17 @@ rc_keep = {
     'fr': 365,
 }
 
+# Configuration of text tables used to store data
+text_table = {
+    'en': 'enwiki_solr_text',
+    'sv': 'svwiki_solr_text',
+    'no': 'nowiki_solr_text',
+    'pt': 'ptwiki_solr_text',
+    'fa': 'fawiki_solr_text',
+    'hu': 'huwiki_solr_text',
+    'ru': 'ruwiki_solr_text',
+}
+
 # Configuration of database tables used to store revision data
 # (used by the co-edit recommender)
 revision_table = {
@@ -685,8 +700,8 @@ config_templare = {
             },
     'fr': { 'config': 'Utilisateur:SuggestBot/config',
             'userbox': 'Utilisateur:SuggestBot/Boîte utilisateur',
-            }
     }
+}
 
 # Which references we'll ignore when looking for backlinks
 # when processing the regular user templates.
@@ -718,7 +733,7 @@ teahouse_templates = {
     'ru': [],
     'hu': [],
     'fr': [],
-    }
+}
 
 # Templates used for one-time requests.
 # Outermost dictionary maps language codes to template configurations
@@ -1088,14 +1103,6 @@ edit_server_hostname = "localhost"
 edit_server_hostport = 10007
 filter_server_hostname = "localhost"
 filter_server_hostport = 10009
-popularity_and_quality_hostname= "localhost"
-popularity_and_quality_hostport= 10008
-
-textdaemon_hostname = "localhost"
-textdaemon_hostport = 11128
-
-classifier_hostname = "localhost"
-classifier_hostport = 11129
 
 # These are kept for backwards compatibility, as the links server is now on
 # the Toolserver.  The port number is used for picking recommendations.

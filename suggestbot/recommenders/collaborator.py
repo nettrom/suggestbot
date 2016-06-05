@@ -21,7 +21,10 @@ Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 Boston, MA  02110-1301, USA.
 '''
 
+import operator
 import logging
+
+import MySQLdb
 
 from suggestbot import config
 from suggestbot import db
@@ -85,9 +88,8 @@ class CollabRecommender:
         # Database connection and cursor
         self.dbconn = None
         self.dbcursor = None
-
-    def recommend(contribs, username, lang,
-                  nrecs = 100, threshold = 3, backoff = 0):
+        
+    def recommend(self, contribs, username, lang, nrecs = 100, threshold = 3, backoff = 0):
 
         '''
         Find `nrecs` number of neighbours for a given user based on
@@ -115,45 +117,45 @@ class CollabRecommender:
         # Override default variables with supplied parameters
         self.lang = lang
         self.nrecs = nrecs
-        self.thresh  = thresh
+        self.thresh  = threshold
         self.backoff = backoff
 
         # SQL queries are defined here so as to not perform the string
         # formatting multiple times.
         self.get_articles_by_user_query = """SELECT rev_title
-             FROM {coedit_table}
-             WHERE rev_user = %(username)s""".format(coedit_table=config.coedit_table[lang])
+             FROM {revision_table}
+             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
 
         # Query to get edited articles for a user who is above the threshold,
         # we then disregard minor edits and reverts.
         self.get_articles_by_expert_user_query = """SELECT rev_title
-             FROM {coedit_table}
+             FROM {revision_table}
              WHERE rev_user = %(username)s
              AND rev_is_minor = 0
-             AND rev_comment_is_revert = 0""".format(coedit_table=config.coedit_table[lang])
+             AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[lang])
 
         # Query to get the number of edits a user has made (in our dataset)
-        self.get_editcount_query = """SELECT count(*) AS numedits
-             FROM {coedit_table}
-             WHERE rev_user = %(username)s""".format(coedit_table=config.coedit_table[lang])
+        self.get_edit_count_query = """SELECT count(*) AS numedits
+             FROM {revision_table}
+             WHERE rev_user = %(username)s""".format(revision_table=config.revision_table[lang])
 
         logging.info("Got request for user {0}:{1} to recommend based on {2} edits!".format(lang, username, len(contribs)))
 
         # Recommendations we'll be returning
         recs = []
 
-        db = db.SuggestBotDatabase()
-        if not db.connect():
+        database = db.SuggestBotDatabase()
+        if not database.connect():
             logging.error("Failed to connect to SuggestBot database")
             return(recs)
 
-        (self.dbconn, self.dbcursor) = db.getConnection()
+        (self.dbconn, self.dbcursor) = database.getConnection()
 
         # Turn contributions into a set, as we'll only use it that way
         contribs = set(contribs)
 
         # Get some recs.
-        recs = get_recs_at_coedit_threshold(username, contribs)
+        recs = self.get_recs_at_coedit_threshold(username, contribs)
 
         # If we're allowed to back off on the coedit threshold and don't have enough
         # recs, ease off on the threshold and try again.
@@ -161,13 +163,13 @@ class CollabRecommender:
         while backoff and self.thresh >= self.min_thresh and needed:
             self.thresh -= 1
             logging.info('Co-edit threshold is now {0}'.format(self.thresh))
-            recs = get_recs_at_coedit_threshold(username, contribs)
+            recs = self.get_recs_at_coedit_threshold(username, contribs)
             needed = nrecs = len(recs)
 
         # Return truncated to nrecs, switched from list of objects to list of dicts
         return([{'item': rec.username, 'value': rec.assoc} for rec in recs[:nrecs]])
 
-    def get_recs_at_coedit_threshold(username, contribs):
+    def get_recs_at_coedit_threshold(self, username, contribs):
         '''
         Get recommendations of other users based on a set of contributions.
 
@@ -177,12 +179,6 @@ class CollabRecommender:
         :param contribs: Contributions we're recommending based on
         :type contribs: set
         '''
-
-        # Must have this template in the page
-        template_filter = param_map_ref['template-filter']
-        
-        # Neighbours must have at least this much association.
-        association_threshold = param_map_ref['association-threshold']
         
         # NOTE: because rev_user and rev_title currently are VARCHAR(255) and UTF-8,
         # they're assumed to consume ~765 bytes in memory, and therefore MySQL chooses
@@ -193,19 +189,20 @@ class CollabRecommender:
         # First query gets users who made non-minor, non-reverting edits
         # to this article.  These are _always_ potential neighbours.
         get_users_by_article_query = """SELECT DISTINCT rev_user
-        FROM {coedit_table}
+        FROM {revision_table}
         WHERE rev_title = %(title)s
         AND rev_is_minor = 0
-        AND rev_comment_is_revert = 0""".format(coedit_table=config.coedit_table[self.lang])
+        AND rev_comment_is_revert = 0""".format(revision_table=config.revision_table[self.lang])
 
         # Second query gets the other users (either minor or reverting),
         # these are only interesting if they're below the threshold for total
         # number of edits, as they otherwise know what they were doing.
         get_minor_users_by_article_query = """SELECT DISTINCT rev_user
-        FROM {coedit_table}
+        FROM {revision_table}
         WHERE rev_title = %(title)s
         AND (rev_is_minor = 1
-        OR rev_comment_is_revert = 1)""".format(coedit_table=config.coedit_table[self.lang])
+        OR rev_comment_is_revert = 1)""".format(revision_table=config.revision_table[self.lang])
+        
 
         # How many different users have coedited a given item with something
         # in the basket
@@ -220,11 +217,13 @@ class CollabRecommender:
         coeditors = {}
         recs = []
 
-        logging.info("user {0}:".format(user_for_query))
+        logging.info("user {0}:".format(username))
 
         user = ""
         num_edits = 0
         page_title = ""
+        
+        print(contribs)
         
         for item in contribs:
             # For each article the user has edited, find other editors.
@@ -232,13 +231,14 @@ class CollabRecommender:
             
             # First we get major stakeholders in the article (non-minor/non-reverting edits)
             try:
-                cursor.execute(get_users_by_article_query,
+                self.dbcursor.execute(get_users_by_article_query,
                                {'title': item})
-            except MySQLdb.Error:
+            except MySQLdb.Error as e:
                 logging.error("unable to execute query to get users by article")
+                logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                 return(recs)
 
-            for row in cursor:
+            for row in self.dbcursor:
                 user = row['rev_user']
                 if user == username: # user can't be their own neighbour
                     continue
@@ -253,13 +253,14 @@ class CollabRecommender:
             # Users we've seen (so we don't re-run SQL queries all the time)...
             seen_minors = {}
             try:
-                cursor.execute(get_minor_users_by_article_query,
+                self.dbcursor.execute(get_minor_users_by_article_query,
                                {'title': item})
-            except MySQLdb.Error:
+            except MySQLdb.Error as e:
                 logging.error("unable to execute query to get users by article")
+                logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                 return(recs)
 
-            for row in cursor:
+            for row in self.dbcursor:
                 if user == username \
                    or user in coeditors \
                    or user in other_editors:
@@ -269,14 +270,16 @@ class CollabRecommender:
 
             for username in seen_minors.keys():
                 try:
-                    cursor.execute(get_editcount_query,
+                    self.dbcursor.execute(self.get_edit_count_query,
                                    {'username': username})
-                except MySQLdb.Error:
+                except MySQLdb.Error as e:
                     logging.error("unable to execute query to get editcount for user")
+                    logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                     continue
 
-                if row['numedits'] >= self.exp_thresh:
-                    other_editors[username] = 1
+                for row in self.dbcursor:
+                    if row['numedits'] >= self.exp_thresh:
+                        other_editors[username] = 1
 
             # Now we have all relevant stakeholders in the article, and can
             # compute the appropriate association.
@@ -286,8 +289,8 @@ class CollabRecommender:
                 # Add user to coeditors so we'll skip this user later
                 coeditors[username] = user_obj
 
-                (assoc, shared) = user_association(username, contribs)
-                if assoc < association_threshold:
+                (assoc, shared) = self.user_association(username, contribs)
+                if assoc < self.assoc_thresh:
                     continue
 
                 user_obj.assoc = assoc
@@ -298,11 +301,11 @@ class CollabRecommender:
         # Find nhood of top k users
         k = 250  # Larger nhood for more recs, hopefully
         recs = sorted(user_assoc.items(),
-                       key=operator.attrgetter('assoc'),
-                       reversed=True)[:k]
+                      key=operator.attrgetter('assoc'),
+                      reverse=True)[:k]
         return recs
 
-    def user_association(user, basket):
+    def user_association(self, user, basket):
         '''
         Calculate the association between a given user and a basket
         of edits.  A user has to have at least self.exp_thresh edits
@@ -324,9 +327,9 @@ class CollabRecommender:
         # we'll only use non-minor, non-reverting article edits for comparison.
         # Otherwise, we use all articles the user edited.
         user_editcount = 0
-        self.dbcursor.execute(self.get_editcount_query,
+        self.dbcursor.execute(self.get_edit_count_query,
                               {'username': user})
-        for row in cursor:
+        for row in self.dbcursor:
             user_editcount = row['numedits']
 
         # Grab the users edits...
