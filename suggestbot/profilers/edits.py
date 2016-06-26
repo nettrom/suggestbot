@@ -290,14 +290,10 @@ class EditProfiler:
             return(user_edits)
 
         for edit in edits:
-            try:
-                if edit['minor']:
-                    edit['minor'] = 'm'
-                user_edits.append(edit)
-            except KeyError:
-                # edit info redacted
-                continue
-
+            if 'minor' in edit:
+                edit['minor'] = 'm'
+            user_edits.append(edit)
+                            
         return(user_edits)
  
 def main():
@@ -306,14 +302,14 @@ def main():
     lang = u'en'
     user = u'Nettrom'
     profiler = EditProfiler()
-    profile = profiler.make_profile(lang, user)
 
+    profile = profiler.make_profile(lang, user)
     print('Got interest profile with {n} items for user {username}'.format(n=len(profile['interests']),username=user))
     print(profile['interests'])
     print(profile['all_edits'])
     print("No. of items in profile: {}, no. of most recent edited articles: {}".format(len(profile['interests']), len(profile['all_edits'])))
-
     print("")
+
     print("Testing backwards compatibility...")
     edits = profiler.get_edits(user, lang, 500)
     print("Asked for 500 edits, got {} edits back".format(len(edits)))
