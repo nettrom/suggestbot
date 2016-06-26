@@ -291,7 +291,9 @@ class EditProfiler:
 
         for edit in edits:
             if 'minor' in edit:
-                edit['minor'] = 'm'
+                edit['minor'] = True
+            else:
+                edit['minor'] = False
             user_edits.append(edit)
                             
         return(user_edits)
