@@ -339,10 +339,6 @@ tasks = {
             'exclusion': r'(Ofullständiga listor)|mallar',
             },
         },
-<<<<<<< HEAD
-=======
-    },
->>>>>>> master
     'ru': {
         'STUB': {
             'categories': [],
@@ -544,7 +540,6 @@ tasks = {
             'exclusion': None,
             }
         }
-    
     }
 
 # URL to the Tool Labs webservice used to get quality metadata
@@ -1144,7 +1139,7 @@ coedit_filter_threshold = 18
 
 ## API endpoint URLs for access to page views and article quality predictions
 pageview_url = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
-ORES_url = "https://ores.wmflabs.org/v2/scores/"
+ORES_url = "https://ores.wikimedia.org/v2/scores/"
 
 ## User-Agent used in HTTP requests
 http_user_agent = 'SuggestBot/1.0'
