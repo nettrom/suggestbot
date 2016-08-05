@@ -97,7 +97,9 @@ class RecommendationServer:
             if not edit['minor']:
                 not_minor_edits.append(edit['title'])
 
-            if config.filter_unimportant:
+            # Note: need to check for the presence of a comment in the dict,
+            # as it might've been deleted.
+            if 'comment' in edit and config.filter_unimportant:
                 if not edit['title'] in reverts:
                     reverts[edit['title']] = 'revert'
                 if not self.is_unimportant_by_comment(edit['comment'], lang):
