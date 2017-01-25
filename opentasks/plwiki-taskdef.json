@@ -1,0 +1,11 @@
+{
+ "definition": "Artykuły wymagające podania definicji",
+ "style": "Artykuły wymagające poprawy stylu",
+ "grammar": "Artykuły niezgodne z normami polskiego języka literackiego",
+ "links": "Linki wewnętrzne do dodania",
+ "format": "Artykuły wymagające formatowania",
+ "misc": "Artykuły wymagające dopracowania",
+ "update": "Artykuły wymagające aktualizacji",
+ "infobox": ["use-subs", "Artykuły bez infoboksu"],
+ "wer": ["use-subsubs", "Artykuły wymagające uzupełnienia źródeł"]
+}
