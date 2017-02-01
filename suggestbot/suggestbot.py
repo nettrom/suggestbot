@@ -140,8 +140,8 @@ class SuggestBot:
            @type interestPages: pywikibot.Page iterator
            '''
 
-        recServer = xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(hostname=config.rec_server,
-                                                                            port=config.main_server_port),
+        recServer = xmlrpc.client.ServerProxy("http://{hostname}:{port}".format(hostname=config.main_server_hostname,
+                                                                            port=config.main_server_hostport),
                                           allow_none=True)
 
         # Server expects language, username, and request type as three parameters,
