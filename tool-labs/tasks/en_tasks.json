@@ -1,0 +1,70 @@
+{
+    "lang": "en",
+    "db_server": "c3.labsdb",
+    "db_config": "~/replica.my.cnf",
+    "task_db": "s51172__tasks",
+    "task_table": "tasks_p",
+    "wiki_db": "enwiki_p",
+    "slice_size": 1000,
+    "stub_re":  r"\b[Ss]tub",
+    "tasks": {
+	"MERGE": {
+	    "categories": ["All articles to be merged",
+                           "Articles to be merged"],
+            "recurseCategories": {"Merge by month": 1},
+            "inclusion": null,
+            "exclusion": stub_re["en"]
+	},
+        "WIKIFY": {
+            "categories": ["All articles covered by WikiProject Wikify"],
+            "recurseCategories": {},
+            "inclusion": null,
+            "exclusion": null
+	},
+        "CLEANUP": {
+            "categories": ["All pages needing cleanup",
+                           "Articles with excessive see also sections",
+                           "Wikipedia introduction cleanup"
+                           "All articles needing copy edit"],
+            "recurseCategories": {},
+            "inclusion": null,
+            "exclusion": null
+        },
+        "SOURCE": {
+            "categories": ["All articles lacking reliable references",
+                           "All articles needing additional references",
+                           "All articles lacking sources",
+                           "All articles with topics of unclear notability",
+                       ],
+            "recurseCategories": {},
+            "inclusion": null,
+            "exclusion": null
+        },
+        "EXPAND": {
+            "categories": ["All articles to be expanded",
+                           "All Wikipedia articles in need of updating"],
+            "recurseCategories": {},
+            "inclusion": null,
+            "exclusion": null
+        },
+        "STUB": {
+            "categories": ["All stub articles"],
+            "recurseCategories": {},
+            "inclusion": null,
+            "exclusion": null
+	},
+        "ORPHAN": {
+            "categories": ["All orphaned articles"],
+            "recurseCategories": {},
+            "inclusion": null,
+            "exclusion": null
+        },
+        "UNENC": {
+            "categories": ["All NPOV disputes",
+                           "All articles that may contain original research"],
+            "recurseCategories": {},
+            "inclusion": null,
+            "exclusion": null
+        }
+    }
+}
