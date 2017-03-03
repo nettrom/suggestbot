@@ -150,7 +150,7 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
 
         :param frequency: The frequency requested, must match one of
                           the config's regular expressions
-                          'ONCE_MONTHLY', 'TWICE_MONTHLY', or 'WEEKLY'.
+                          'once_monthly', 'twice_monthly', or 'weekly'.
         :type frequency: str
         '''
 
@@ -161,7 +161,7 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
         if re.match(config.once_monthly[self._lang],
                     frequency, re.IGNORECASE):
             return 0
-        if re.match(config.once_monthly[self._lang],
+        if re.match(config.twice_monthly[self._lang],
                     frequency, re.IGNORECASE):
             # Twice a month
             return 14
@@ -477,9 +477,9 @@ class Subscribers:
 
         # Loop over them, userbox first as any settings in the config template
         # is to take priority.
-        for templateName in ['userbox', 'config']:
+        for temp_nick in ['userbox', 'config']:
             configPage = pywikibot.Page(self._site,
-                                        configTemplates[templateName])
+                                        configTemplates[temp_nick])
             configPages.add(configPage.title().strip().lower())
 
             # Grab all links to the config template that are redirects
@@ -565,7 +565,7 @@ class Subscribers:
                     logging.info('user last edited at {}'.format(lastEditTime))
                     timeSinceLastEdit = datetime.utcnow() - lastEditTime
                     if timeSinceLastEdit.days >= config.retired_days:
-                        subscriber.retired = 1
+                        subscriber._retired = 1
 
                 # NOTE: Don't add "if not subscriber.retired:" to skip
                 # the template checking if the user is retired.  Don't do that.
@@ -604,7 +604,7 @@ class Subscribers:
                         
                 # Always updating this ensures that we capture users who return
                 # and do not specify where they want it posted.
-                subscriber.page_title = subpageTitle
+                subscriber._page_title = subpageTitle
 
                 ## FIXME: if we've gone through all the templates on a page
                 ## and not found SuggestBot's template, we have a parsing error.
