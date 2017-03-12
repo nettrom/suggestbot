@@ -6,14 +6,14 @@
     "task_table": "tasks_p",
     "wiki_db": "enwiki_p",
     "slice_size": 1000,
-    "stub_re":  r"\b[Ss]tub",
+    "stub_re": "\b[Ss]tub",
     "tasks": {
 	"MERGE": {
 	    "categories": ["All articles to be merged",
                            "Articles to be merged"],
             "recurseCategories": {"Merge by month": 1},
             "inclusion": null,
-            "exclusion": stub_re["en"]
+            "exclusion": "stub_re"
 	},
         "WIKIFY": {
             "categories": ["All articles covered by WikiProject Wikify"],
@@ -24,7 +24,7 @@
         "CLEANUP": {
             "categories": ["All pages needing cleanup",
                            "Articles with excessive see also sections",
-                           "Wikipedia introduction cleanup"
+                           "Wikipedia introduction cleanup",
                            "All articles needing copy edit"],
             "recurseCategories": {},
             "inclusion": null,
@@ -34,8 +34,7 @@
             "categories": ["All articles lacking reliable references",
                            "All articles needing additional references",
                            "All articles lacking sources",
-                           "All articles with topics of unclear notability",
-                       ],
+                           "All articles with topics of unclear notability"],
             "recurseCategories": {},
             "inclusion": null,
             "exclusion": null

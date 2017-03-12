@@ -94,10 +94,6 @@ class TaskUpdater:
                           AND category=%(category)s
                           AND seen=0""".format(task_table=self.config['task_table'])
 
-        insert_query = """INSERT INTO {task_table}
-                          (lang, page_id, category)
-                          VALUES (%(lang)s, %(page_id)s, %(category)s)
-                          ON DUPLICATE KEY UPDATE seen=1""".format(task_table=self.config['task_table'])
         
         if not self.db_connect():
             logging.error('Unable to connect to task database server {}'.format(self.config['db_server']))
@@ -123,7 +119,53 @@ class TaskUpdater:
 
         self.db_disconnect()
         return()
+
+    def grab_from_category(self, task_name, cat_name):
+        '''
+        Take all articles in the given category and add them to the task
+        table in the given task category.
+
+        :param task_name: The task category we are updating
+        :type task_name: str
+
+        :param cat_name: The category we get article from
+        :type cat_name: str
+        '''
+
+        find_query = """SELECT page_id
+                        FROM categorylinks
+                        JOIN page
+                        ON page_id=cl_from
+                        WHERE cl_to=%(cat_name)s"""
         
+        insert_query = """INSERT INTO {task_table}
+                          (lang, page_id, category)
+                          VALUES (%(lang)s, %(page_id)s, %(category)s)
+                          ON DUPLICATE KEY UPDATE seen=1""".format(task_table=self.config['task_table'])
+
+        page_ids = []
+        
+        self.db_cursor.execute(find_query,
+                               {'cat_name': cat_name.replace(' ', '_')})
+
+        for row in self.db_cursor.fetchall():
+            page_ids.append(row['page_id'])
+
+        i = 0
+        while i < len(page_ids):
+            ## Grab a subset of the articles of size `config['slice_size']`
+            ## and turn each into a triplet fit for sending to executemany()
+            subset = [(self.config['lang'], page_id, task_name) for page_id
+                      in page_ids[i : i+self.config['slice_size']]]
+
+            self.db_cursor.executemany(insert_query,
+                                       subset)
+
+            i = i + self.config['slice_size']
+
+        ## ok, done
+        return()
+    
 class WorkUpdater:
     def __init__(self, lang=None, configFile=None, config=None,
                  taskCatDef=None, verbose=False):
@@ -171,8 +213,8 @@ class WorkUpdater:
 
         # RegEx used for proper quoting of single quotes in SQL queries,
         # and escaping '\' (because there _is_ an article named 'Control-\');
-	self.quote_re = re.compile(r"[']");
-        self.backslash_re = re.compile(r"\\");
+        self.quote_re = re.compile("[']")
+        self.backslash_re = re.compile("\\")
 
         self.db = SuggestBotDatabase(config=self.config);
         self.dbConn = None;
@@ -184,7 +226,7 @@ class WorkUpdater:
         """
 
         if not self.db.connect():
-            sys.stderr.write(u"Error: cannot connect to SuggestBot database, exiting!\n");
+            sys.stderr.write("Error: cannot connect to SuggestBot database, exiting!\n");
             return False;
 
         (self.dbConn, self.dbCursor) = self.db.getConnection();
@@ -248,37 +290,37 @@ class WorkUpdater:
         self.catTableName = self.config.getConfig('TASK_TABLE')[self.lang];
 
         # Query to reset the seen column for all articles in 'categoryname'
-        resetQuery = ur"""UPDATE {tablename}
-                          SET seen=0
-                          WHERE category=%(catname)s""".format(tablename=self.catTableName);
+        resetQuery = r"""UPDATE {tablename}
+                         SET seen=0
+                         WHERE category=%(catname)s""".format(tablename=self.catTableName);
 
         # Query to delete all rows in 'categoryname' that have seen=0,
         # to be run after a successful update to clean out articles that are
         # no longer members of our category.
-        deleteQuery = ur"""DELETE FROM {tablename}
-                           WHERE category=%(catname)s
-                           AND seen=0""".format(tablename=self.catTableName);
+        deleteQuery = r"""DELETE FROM {tablename}
+                          WHERE category=%(catname)s
+                          AND seen=0""".format(tablename=self.catTableName);
 
         # Query to check if an article already exists in the database
-        self.pageExistsQuery = ur"""SELECT title
-                                    FROM {tablename}
-                                    WHERE category=%(catname)s AND title=%(title)s""".format(tablename=self.catTableName);
+        self.pageExistsQuery = r"""SELECT title
+                                   FROM {tablename}
+                                   WHERE category=%(catname)s AND title=%(title)s""".format(tablename=self.catTableName);
 
         # Query to insert a new article
-        self.insertQuery = ur"""INSERT INTO {tablename}
-                                (title, category)
-                                VALUES (%(title)s, %(catname)s)""".format(tablename=self.catTableName);
+        self.insertQuery = r"""INSERT INTO {tablename}
+                               (title, category)
+                               VALUES (%(title)s, %(catname)s)""".format(tablename=self.catTableName);
 
         # Query to update the seen-bit for a given article
-        self.updateQuery = ur"""UPDATE {tablename}
-                                SET seen=1
-                                WHERE title=%(title)s AND category=%(catname)s""".format(tablename=self.catTableName);
+        self.updateQuery = r"""UPDATE {tablename}
+                               SET seen=1
+                               WHERE title=%(title)s AND category=%(catname)s""".format(tablename=self.catTableName);
 
         # reset all seen-values for articles in 'categoryname'
         self.dbCursor.execute(resetQuery, {'catname': self.categoryName.encode('utf-8')});
         self.dbConn.commit();
         if self.verbose:
-            print "INFO: number of rows with updated seen-values: %d" % (self.dbCursor.rowcount,);
+            print("INFO: number of rows with updated seen-values: {}".format(self.dbCursor.rowcount))
 
         self.storageQueue = set();
 
@@ -296,7 +338,7 @@ class WorkUpdater:
         self.dbCursor.execute(deleteQuery, {'catname': self.categoryName.encode('utf-8')});
         self.dbConn.commit();
         if self.verbose:
-            print u"INFO: deleted {n} articles that are no longer in category {catname}".format(n=self.dbCursor.rowcount, catname=self.categoryName).encode('utf-8');
+            print("INFO: deleted {n} articles that are no longer in category {catname}".format(n=self.dbCursor.rowcount, catname=self.categoryName).encode('utf-8'))
 
         return True;
 
@@ -313,7 +355,7 @@ class WorkUpdater:
 
         if len(self.storageQueue) == 250:
             if self.verbose:
-                print "INFO: Storage queue is full, flushing...";
+                print("INFO: Storage queue is full, flushing...")
             self.flushQueue();
 
     def flushQueue(self):
@@ -347,7 +389,7 @@ class WorkUpdater:
             # update the seen attribute for those
             if len(articlesToUpdate) > 0:
                 if self.verbose:
-                    print "INFO: Updating the seen attribute for %d existing articles." % (len(articlesToUpdate),);
+                    print("INFO: Updating the seen attribute for {} existing articles.".format(len(articlesToUpdate)))
 
                 self.dbCursor.executemany(self.updateQuery, articlesToUpdate);
 
@@ -360,7 +402,7 @@ class WorkUpdater:
 
             if len(articlesToInsert) > 0:
                 if self.verbose:
-                    print "INFO: Inserting %d articles into the database." % (len(articlesToInsert),);
+                    print("INFO: Inserting {} articles into the database.".format(len(articlesToInsert)))
 
                 self.dbCursor.executemany(self.insertQuery, articlesToInsert);
 
@@ -369,9 +411,9 @@ class WorkUpdater:
             # clear the queue
             self.storageQueue.clear();
             return True;
-        except MySQLdb.Error, e:
+        except MySQLdb.Error as e:
             sys.stderr.write("SBot Error: Unable to store/update articles in database.\n");
-            sys.stderr.write("Error %d: %s\n" % (e.args[0], e.args[1]));
+            sys.stderr.write("Error {}: {}\n".format(e.args[0], e.args[1]))
             sys.exit(1);
             
         return False;
@@ -425,7 +467,7 @@ class WorkUpdater:
         
         try:
             if self.verbose:
-                print "INFO: Storing article titles in category '%s'." % (category.title().encode('utf-8'));
+                print("INFO: Storing article titles in category '{}'.".format(category.title().encode('utf-8')))
             for article in category.articles(namespaces=[0]):
                 # We define redirects as seen articles, but do not store them as
                 # articles that need work.  NOTE: consider following the redirect...
@@ -439,7 +481,7 @@ class WorkUpdater:
             # and continue.
 
             if self.verbose:
-                print "INFO: Caught pywikibot exception, passing over.";
+                print("INFO: Caught pywikibot exception, passing over.")
             pass;
 
         try:
@@ -451,16 +493,16 @@ class WorkUpdater:
 
                     if inclusion_re and not inclusion_re.search(subcat.title()):
                         if self.verbose:
-                            print "INFO: category '%s' failed inclusion check." % (subcat.title().encode('utf-8'),);
+                            print("INFO: category '{}' failed inclusion check.".format(subcat.title().encode('utf-8')))
                         continue;
 
                     if exclusion_re and exclusion_re.search(subcat.title()):
                         if self.verbose:
-                            print "INFO: category '%s' matched exclusion check." % (subcat.title().encode('utf-8'),);
+                            print("INFO: category '{}' matched exclusion check.".format(subcat.title().encode('utf-8')))
                         continue;
 
                     if self.verbose:
-                        print "INFO: now traversing category '%s' to level %d." % (subcat.title().encode('utf-8'), limit-1,);
+                        print("INFO: now traversing category '{}' to level {}.".format(subcat.title().encode('utf-8'), limit-1))
 
                     self.seen_categories.add(subcat.title());
                     self.catTraverser(category=subcat, limit=limit-1,
@@ -469,7 +511,7 @@ class WorkUpdater:
         except pywikibot.exceptions.Error:
             # Again we catch the error...
             if self.verbose:
-                print "INFO: caught pywikibot error, passing over.";
+                print("INFO: caught pywikibot error, passing over.")
             pass;
 
         return;
@@ -526,7 +568,7 @@ class WorkUpdater:
             self.seen_categories.add(cat.title());
                 
             if self.verbose:
-                print u"INFO: storing titles in {catname}".format(catname=cat.title()).encode('utf-8');
+                print("INFO: storing titles in {catname}".format(catname=cat.title()).encode('utf-8'))
             try:
                 for article in cat.articles(namespaces=[0]):
                     # We define redirects as seen articles, but do not store them as
@@ -602,7 +644,7 @@ class WorkUpdater:
                     # NOTE: we only store article titles in Main namespace.
                     try:
                         if page.title() not in full_list:
-                            outfile.write("%s\n" % (page.title(),));
+                            outfile.write("{}\n".format(page.title()))
                             full_list.add(page.title());
                     except pywikibot.exceptions.Error:
                         # The namespace() call might error out due to
@@ -621,7 +663,7 @@ class WorkUpdater:
                 try:
                     for page in cat.articles(namespaces=[0]):
                         if page.title() not in full_list:
-                            outfile.write("%s\n" % (page.title(),));
+                            outfile.write("{}\n".format(page.title()))
                             full_list.add(page.title());
                 except pywikibot.exceptions.Error:
                     # If there's an error in the article list, we simply
@@ -637,7 +679,7 @@ class WorkUpdater:
                     try:
                         for page in subcat.articles(namespaces=[0]):
                             if page.title() not in full_list:
-                                outfile.write("%s\n" % (page.title(),));
+                                outfile.write("{}\n".format(page.title()))
                                 full_list.add(page.title());
                     except pywikibot.exceptions.Error:
                         # Same as before...
@@ -712,21 +754,20 @@ def main():
 
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
-    
-                try:
-                        with codecs.open(args.taskfile, 'r', 'utf-8') as infile:
-                                args.taskdef = json.load(infile)
-                except IOError:
-                        logging.error('Unable to open task definition file {0}, cannot continue'.format(args.taskfile))
-                        return()
-                except:
-                        logging.error('Unable to parse task definition file {0} as JSON, cannot continue'.format(args.taskfile))
-                        return()
         
-    ## parse the config file
-    ## instantiate the updater
-    ## update the database
-    ## ok, done!
+    try:
+        with open(args.config_file, 'r', encoding='utf-8') as infile:
+            task_config = json.load(infile)
+    except IOError:
+        logging.error('Unable to open task definition file {0}, cannot continue'.format(args.config_file))
+        return()
+    except Exception as e:
+        logging.error('Unable to parse task definition file {0} as JSON, cannot continue'.format(args.config_file))
+        logging.error('{}'.format(e))
+        return()
+
+    updater = TaskUpdater(task_config)
+    updater.update_database()
     return()
 
 if __name__ == "__main__":
