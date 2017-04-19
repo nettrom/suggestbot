@@ -78,6 +78,9 @@ class InlinkTableUpdater:
         self.sliceSize = sliceSize;
         self.commitSize = commitSize;
 
+        ## Maximum number of days before a page's number of inlinks is updated
+        self.max_age = 7
+
         # Database variables...
         self.dbConn = None;
         self.dbCursor = None;
@@ -156,15 +159,17 @@ class InlinkTableUpdater:
         """
         checkRunningQuery = u"""SELECT ilcu_update_running
                                 FROM {ilcUpdateTable}
-                                WHERE ilcu_lang=%(lang)s""".format(ilcUpdateTable=self.ilcUpdateTableName)
+                                WHERE ilcu_lang=%(lang)s""".format(
+                                    ilcUpdateTable=self.ilcUpdateTableName)
         setRunningQuery = u"""UPDATE {ilcUpdateTable}
                               SET ilcu_update_running=1
-                              WHERE ilcu_lang=%(lang)s""".format(ilcUpdateTable=self.ilcUpdateTableName)
+                              WHERE ilcu_lang=%(lang)s""".format(
+                                  ilcUpdateTable=self.ilcUpdateTableName)
         self.dbCursor.execute(checkRunningQuery, {'lang': self.lang})
         row = self.dbCursor.fetchone()
         self.dbCursor.fetchall() # flush cursor
 
-        if ord(row['ilcu_update_running']):
+        if row['ilcu_update_running']:
             raise UpdateRunningError
 
         self.dbCursor.execute(setRunningQuery, {'lang': self.lang})
@@ -181,7 +186,8 @@ class InlinkTableUpdater:
         """
         setRunningQuery = u"""UPDATE {ilcUpdateTable}
                               SET ilcu_update_running=0
-                              WHERE ilcu_lang=%(lang)s""".format(ilcUpdateTable=self.ilcUpdateTableName);
+                              WHERE ilcu_lang=%(lang)s""".format(
+                                  ilcUpdateTable=self.ilcUpdateTableName);
         self.dbCursor.execute(setRunningQuery, {'lang': self.lang});
         if self.dbCursor.rowcount != 1:
             raise UpdateTableError;
@@ -204,11 +210,12 @@ class InlinkTableUpdater:
         # Query to update the ILC table using values from the temporary table
         updateFromTempQuery = ur'''UPDATE {ilcTableName} ilc,
                                    {ilcTempTable} ilc_temp
-                                   SET ilc.ilc_numlinks=ilc_temp.ilc_numlinks
+                                   SET ilc.ilc_numlinks=ilc_temp.ilc_numlinks,
+                                       ilc.ilc_age=ilc_temp.ilc_age
                                    WHERE ilc.ilc_page_id=ilc_temp.ilc_page_id'''
 
         # Query to find articles that need to be deleted, the left join
-        # means p.page_id is null for those pages.  This can take a little
+        # means p.page_id is null for those pages. This can take a little
         # while for large wikis.
         findDeletedPagesQuery = ur'''SELECT
               ilc_page_id FROM
@@ -246,23 +253,81 @@ class InlinkTableUpdater:
                                     WHERE p.page_namespace=0
                                     AND rd_from IN ({pageidlist})'''
 
+        # Query to insert a set of articles with no inlink count
+        # and no age into an ILC table
+        insert_query = '''INSERT INTO {ilc_table}
+                          (ilc_page_id) VALUES (%s)'''
+        
         # Query to insert a set of articles with their inlink count
         # into an ILC table
         insertSetQuery = ur'''INSERT INTO {ilcTableName}
-                              SELECT
-                              p.page_id AS ilc_page_id,
-                              COUNT(*) AS ilc_numlinks
-                              FROM page p JOIN pagelinks pl ON
-                                 (p.page_namespace=pl.pl_namespace
-                                  AND p.page_title=pl.pl_title)
-                              WHERE p.page_id IN ({idlist})
-                              AND pl.pl_from_namespace=0
-                              GROUP BY p.page_id'''
+            SELECT page_id AS ilc_page_id,
+                   links.numlinks + IFNULL(redirlinks.numlinks, 0)
+                   - IFNULL(redirs.numredirs, 0) AS ilc_numlinks,
+                   0 AS ilc_age
+            FROM
+            (SELECT p.page_id AS page_id,
+                    count(*) AS numlinks
+             FROM page p
+             JOIN pagelinks pl
+             ON (p.page_namespace=pl.pl_namespace
+                 AND p.page_title=pl.pl_title)
+             WHERE p.page_id IN ({idlist})
+             AND pl.pl_from_namespace=0
+             GROUP BY p.page_id
+            ) AS links
+            LEFT JOIN
+            (SELECT p1.page_id,
+                    count(*) AS numredirs
+             FROM page p1
+             JOIN redirect 
+             ON (p1.page_namespace=rd_namespace
+                 AND page_title=rd_title)
+             JOIN page p2
+             ON rd_from=p2.page_id
+             WHERE p2.page_namespace=0
+             AND p1.page_id IN ({idlist})
+             GROUP BY page_id
+            ) AS redirs
+            USING (page_id)
+            LEFT JOIN
+            (SELECT p1.page_id,
+                    count(*) AS numlinks
+             FROM page p1
+             JOIN redirect 
+             ON (p1.page_namespace=rd_namespace
+                 AND page_title=rd_title)
+             JOIN page p2
+             ON rd_from=p2.page_id
+             JOIN pagelinks pl
+             ON (p2.page_namespace=pl.pl_namespace
+                 AND p2.page_title=pl.pl_title)
+             WHERE p2.page_namespace=0
+             AND pl.pl_from_namespace=0
+             AND p1.page_id IN ({idlist})
+             GROUP BY page_id
+            ) AS redirlinks
+            USING (page_id)'''
 
         # Query to delete a page from the inlink count table
         deletePageQuery = ur'''DELETE FROM {ilcTableName}
                                WHERE ilc_page_id IN ({idlist})'''
 
+        # Query to update the age of all pages
+        update_age_query = ur'''UPDATE {ilc_table}
+                                SET ilc_age = ilc_age + 1'''
+
+        # Query to find all pages that have reached a given age
+        get_aged_query = ur'''SELECT ilc_page_id
+                              FROM {ilc_table}
+                              WHERE ilc_age >= {age}'''
+
+        ## After an update, all articles that still have age >= self.max_age
+        ## do not have any inlinks. So, we reset those.
+        reset_aged_query = '''UPDATE {ilc_table}
+                              SET ilc_numlinks=0, ilc_age=0
+                              WHERE ilc_age >= {age}'''
+        
         # Query to get the last update timestamp from the database
         getLastupdateQuery = ur'''SELECT ilcu_timestamp
                                   FROM {ilcUpdateTable}
@@ -329,7 +394,7 @@ class InlinkTableUpdater:
         #    need updating.
         self.dbCursor.execute(findNewPagesQuery);
 
-        pagesToInsert = set();
+        pagesToUpdate = set();
         done = False;
         while not done:
             row = self.dbCursor.fetchone();
@@ -337,28 +402,28 @@ class InlinkTableUpdater:
                 done = True;
                 continue;
 
-            pagesToInsert.add(row['page_id']);
+            pagesToUpdate.add(row['page_id']);
 
         # 2.1 Listify pagesToUpdate, iterate over slices and insert
         #     the pages into the ILC table.
-        logging.info("Inserting {n} articles to the ILC table".format(n=len(pagesToInsert)));
+        logging.info("Inserting {n} articles to the ILC table".format(n=len(pagesToUpdate)));
 
-        # Build a list of strings we can join before executing the query
-        pagesToInsert = [str(pageId) for pageId in pagesToInsert];
-        i = 0;
-        while i < len(pagesToInsert):
-            self.dbCursor.execute(insertSetQuery.format(ilcTableName=self.ilcTableNames[self.lang],
-                                                        idlist=",".join(pagesToInsert[i:i+self.sliceSize])));
+        # Build a list of page IDs tuples we can partition
+        pages = [(p) for p in pagesToUpdate]
+        i = 0
+        while i < len(pages):
+            self.dbCursor.executemany(insert_query.format(
+                ilc_table=self.ilcTableNames[self.lang]),
+                                      pages[i:i + self.sliceSize])
 
             i += self.sliceSize;
             if i % self.commitSize == 0:
-                logging.info("Commiting {n} article inserts".format(n=self.commitSize));
-                self.dbConn.commit();
+                logging.info("Commiting {n} article inserts".format(n=self.commitSize))
+                self.dbConn.commit()
 
         # Commit any non-commited inserts
-        self.dbConn.commit();
+        self.dbConn.commit()
 
-        pagesToInsert = None;
         logging.info("Done inserting pages, looking for other articles to update");
 
         # 3: Find articles that have been updated since our last update
@@ -407,7 +472,6 @@ class InlinkTableUpdater:
         # they link to and add that to our pages in need of updating.
         # (Our basic assumption is that this takes less time than grabbing text
         #  and diffing to find the exact link added/removed)
-        pagesToUpdate = set();
         redirectsToResolve = set();
         i = 0;
         while i < len(changedPages):
@@ -432,7 +496,8 @@ class InlinkTableUpdater:
         redirectsToResolve = [str(pageid) for pageid in redirectsToResolve];
         i = 0;
         while i < len(redirectsToResolve):
-            self.dbCursor.execute(resolveRedirectQuery.format(pageidlist=",".join(redirectsToResolve[i:i+self.sliceSize])));
+            self.dbCursor.execute(resolveRedirectQuery.format(
+                pageidlist=",".join(redirectsToResolve[i:i+self.sliceSize])));
             for row in self.dbCursor.fetchall(): # <= 100 rows, fetchall's OK
                 if not row['page_is_redirect']:
                     pagesToUpdate.add(row['page_id']);
@@ -441,34 +506,62 @@ class InlinkTableUpdater:
 
         logging.info("Resolved redirects, found {n} articles in need of an update.".format(n=len(pagesToUpdate)));
 
+        # Also add any page that has not been updated in self.max_age days
+        self.dbCursor.execute(update_age_query.format(
+            ilc_table=self.ilcTableNames[self.lang]))
+        self.dbCursor.fetchall() # flush cursor
+        self.dbConn.commit()
+
+        self.dbCursor.execute(get_aged_query.format(
+            ilc_table=self.ilcTableNames[self.lang], age=self.max_age))
+        done = False
+        while not done:
+            row = self.dbCursor.fetchone()
+            if not row:
+                done = True
+                continue
+
+            pagesToUpdate.add(row['ilc_page_id'])
+
+        logging.info('added pages that have reached max age, now have {} articles in need of an update'.format(len(pagesToUpdate)))
+            
         # 4: Iterate over all changed pages and update their inlink counts
         # 4.1: Create the temporary table
-        self.dbCursor.execute(createTempTableQuery.format(ilcTempTable=self.ilcTempTableName,
-                                                          ilcTableName=self.ilcTableNames[self.lang]));
+        self.dbCursor.execute(createTempTableQuery.format(
+            ilcTempTable=self.ilcTempTableName,
+            ilcTableName=self.ilcTableNames[self.lang]))
 
         # 4.2: listify and insert into the temporary table
-        pagesToUpdate = [str(pageId) for pageId in pagesToUpdate];
+        pagesToUpdate = [str(pageId) for pageId in pagesToUpdate]
 
-        i = 0;
+        i = 0
         while i < len(pagesToUpdate):
             # Insert into the temp table
-            self.dbCursor.execute(insertSetQuery.format(ilcTableName=self.ilcTempTableName,
-                                                        idlist=",".join(pagesToUpdate[i:i+self.sliceSize])));
+            self.dbCursor.execute(insertSetQuery.format(
+                ilcTableName=self.ilcTempTableName,
+                idlist=",".join(pagesToUpdate[i:i+self.sliceSize])))
 
-            i += self.sliceSize;
+            i += self.sliceSize
 
             if i % self.commitSize == 0:
-                logging.info("Inserted {n} articles in the temp table.".format(n=self.commitSize));
+                logging.info("Inserted {n} articles in the temp table.".format(n=self.commitSize))
 
-        logging.info("Done inserting articles, updating ILC table from temp table");
+        logging.info("Done inserting articles, updating ILC table from temp table")
 
         # 4.3: Update the ILC table using the temp table and commit changes
-        self.dbCursor.execute(updateFromTempQuery.format(ilcTableName=self.ilcTableNames[self.lang],
-                                                         ilcTempTable=self.ilcTempTableName));
-        logging.info("Updated {n} rows in the master table, committing changes".format(n=self.dbCursor.rowcount));
-        self.dbConn.commit();
-        
+        self.dbCursor.execute(updateFromTempQuery.format(
+            ilcTableName=self.ilcTableNames[self.lang],
+            ilcTempTable=self.ilcTempTableName))
 
+        logging.info("Updated {n} rows in the master table from the temp table".format(n=self.dbCursor.rowcount))
+
+        self.dbCursor.execute(reset_aged_query.format(
+            ilc_table=self.ilcTableNames[self.lang],
+            age=self.max_age))
+
+        logging.info("reset inlink count for {n} aged rows in the ILC table, committing all changes".format(n=self.dbCursor.rowcount))
+        self.dbConn.commit()
+        
         # Update the last updated timestamp
         self.dbCursor.execute(setLastupdateQuery,
                               {'timestamp': newUpdateTime,
