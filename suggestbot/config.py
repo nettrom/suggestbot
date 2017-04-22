@@ -678,7 +678,7 @@ templates = {
     }
 
 # Templates added by our regular users.
-config_templare = {
+config_templates = {
     'en': { 'config': 'User:SuggestBot/config',
             'userbox': 'User:SuggestBot/userbox', },
     'no': { 'config': 'Bruker:AnbefalingsBot/konfigurasjon',
@@ -856,7 +856,7 @@ empty_placeholder = {
 
 # Base-filename of file to store names of users where the configuration
 # didn't parse correctly.
-userlist_warnings = '../data/userlists/regulars/warnings.txt'
+userlist_warnings = '../logs/subscriber_warnings.txt'
 
 # Dictionary of accepted parameters for our configuration templates.
 # Keys are language codes, which then map to a dictionary where each
@@ -923,7 +923,7 @@ twice_monthly = {
     }
 weekly = {
     # NOTE: we're allowing users to specify getting them daily, but serve them weekly
-    'en': r"(once a|twice a|every) (week|day)|weekly|daily",
+    'en': r"weekly|daily|(once a|twice a|every) (week|day)",
     'no': r"en gang i uken",
     'sv': r"en gång i veckan",
     'pt': r"uma vez por semana|semanalmente",
@@ -1171,3 +1171,49 @@ task_dist = {
 ## Threshold for labelling an article's popularity as low, medium, or high
 pop_thresh_low = 2
 pop_thresh_med = 7
+
+## Size limits in kilobytes for talk pages and other pages.
+## '0' means no limit
+talkpage_limit = {
+    'en': 256,
+    'fa': 0,
+    'fr': 0,
+    'hu': 0,
+    'no': 0,
+    'pt': 0,
+    'ru': 0,
+    'sv': 0
+    }
+    
+page_limit = {
+    'en': 1024,
+    'fa': 0,
+    'fr': 0,
+    'hu': 0,
+    'no': 0,
+    'pt': 0,
+    'ru': 0,
+    'sv': 0
+    }
+
+talkpage_warning = {
+    'en': 'User:SuggestBot/Templates/TalkSizeWarning',
+    'fa': '',
+    'fr': '',
+    'hu': '',
+    'no': '',
+    'pt': '',
+    'ru': '',
+    'sv': ''
+    }
+
+page_warning = {
+    'en': 'User:SuggestBot/Templates/SizeWarning',
+    'fa': '',
+    'fr': '',
+    'hu': '',
+    'no': '',
+    'pt': '',
+    'ru': '',
+    'sv': ''
+    }
