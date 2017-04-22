@@ -4,7 +4,7 @@
 Script to update the list of subscribers to reflect the state
 on a given Wikipedia.
 
-Copyright (C) 2005-2016 SuggestBot Dev Group
+Copyright (C) 2005-2017 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public

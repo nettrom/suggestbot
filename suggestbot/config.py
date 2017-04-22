@@ -1171,3 +1171,49 @@ task_dist = {
 ## Threshold for labelling an article's popularity as low, medium, or high
 pop_thresh_low = 2
 pop_thresh_med = 7
+
+## Size limits in kilobytes for talk pages and other pages.
+## '0' means no limit
+talkpage_limit = {
+    'en': 256,
+    'fa': 0,
+    'fr': 0,
+    'hu': 0,
+    'no': 0,
+    'pt': 0,
+    'ru': 0,
+    'sv': 0
+    }
+    
+page_limit = {
+    'en': 1024,
+    'fa': 0,
+    'fr': 0,
+    'hu': 0,
+    'no': 0,
+    'pt': 0,
+    'ru': 0,
+    'sv': 0
+    }
+
+talkpage_warning = {
+    'en': 'User:SuggestBot/Templates/TalkSizeWarning',
+    'fa': '',
+    'fr': '',
+    'hu': '',
+    'no': '',
+    'pt': '',
+    'ru': '',
+    'sv': ''
+    }
+
+page_warning = {
+    'en': 'User:SuggestBot/Templates/SizeWarning',
+    'fa': '',
+    'fr': '',
+    'hu': '',
+    'no': '',
+    'pt': '',
+    'ru': '',
+    'sv': ''
+    }

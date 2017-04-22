@@ -2,7 +2,8 @@
 # -*- coding: utf-8  -*-
 """
 Script to update the list of subscribers to reflect the state
-on a given Wikipedia.
+on a given Wikipedia and then post suggestions to all subscribers
+due for a new set of suggestions.
 
 Copyright (C) 2005-2017 SuggestBot Dev Group
 
@@ -47,6 +48,7 @@ def main():
         logging.basicConfig(level=logging.INFO)
 
     updater = Subscribers(args.lang)
+    updater.update_subscribers()
     updater.post_suggestions()
     return()
 

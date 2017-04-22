@@ -3,7 +3,7 @@
 '''
 Library with SuggestBot functionality
 
-Copyright (C) 2005-2015 SuggestBot Dev Group
+Copyright (C) 2005-2017 SuggestBot Dev Group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -563,6 +563,26 @@ class SuggestBot:
         # ok, all done
         return
 
+    def post_warning(self, page_source, is_talk=True):
+        '''
+        We want to post to the given page, but it is too large. Post either
+        a talk page suggestion or SuggestBot-specific suggestion about
+        archiving the page.
+
+        :param page: The page we're posting to
+        :type page: pywikibot.Page
+
+        :param is_talk: Is it a talk page?
+        :type is_talk: bool
+        '''
+
+        message = config.page_warning
+        if is_talk:
+            message = config.talkpage_warning
+
+        return("{old_source}\n\n{{{{subst:{message}}}}}".format(
+            old_source=page_source, message=message))
+
     def postRecommendations(self, username="", recMsg=None,
                             page=None, force=False, replace=False,
                             headLevel=2):
@@ -601,7 +621,7 @@ class SuggestBot:
             logging.warnng("user {username} is blocked, posting aborted.".format(username=username).encode('utf-8'))
             return(False)
 
-        # get the user's talk page, or a preferred page to post recs to if defined
+        # get the user's talk page, or a preferred page if defined
         if page:
             destPage = pywikibot.Page(self.site, page)
         else:
@@ -619,10 +639,14 @@ class SuggestBot:
         # What language are we posting to?
         lang = config.wp_langcode
 
-        # We're currently struggling to post to large pages on en-wiki.  If the destination
-        # page is >1MB, skip posting, anticipating that it'll be shorter next time.
-        if lang == 'en' and len(pageSource.encode('utf-8')) > 1024*1024:
-            logging.warning("Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'))
+        ## Posting to large pages can be problematic, and at least enwiki has
+        ## a guideline against large talk pages.
+        page_length = len(pageSource.encode('utf-8'))
+        if (page and config.page_limit[lang] and \
+            page_length > 1024*config.page_limit[lang]) \
+            or (config.talkpage_limit[lang] and \
+                page_length > 1024*config.talkpage_limit[lang]):
+            logging.warning("destination page {title} is too large for saving, {n:,} bytes, posting cancelled!".format(title=destPage.title(), n=page_length))
             return(False)
 
         # Create new page source by adding or replacing suggestions
@@ -691,8 +715,8 @@ class SuggestBot:
 
            '''
         if not username:
-            sys.stderr.write("SuggestBot Error: must supply username to do recommendations.\n")
-            return(None)
+            logging.error("must supply username to do recommendations")
+            return(False)
 
         # create user object
         # FIXME: instead of passing usernames around, we can pass this user object
@@ -710,17 +734,127 @@ class SuggestBot:
 
         # Test if the destination page is too large, as we otherwise struggle
         # with posting, getting timeouts.
+        if page:
+            destPage = pywikibot.Page(self.site, page)
+        else:
+            destPage = recUser.getUserTalkPage()
+
         try:
-            if page:
-                destPage = pywikibot.Page(self.site, page)
-            else:
-                destPage = recUser.getUserTalkPage()
             pageSource = destPage.get()
-            if lang == 'en' and len(pageSource.encode('utf-8')) > 1024*1024:
-                sys.stderr.write("SBot Warning: Destination page {title} is too large for saving, {n:,} bytes, posting cancelled!\n".format(title=destPage.title(), n=len(pageSource.encode('utf-8'))).encode('utf-8'))
+            page_length = len(pageSource.encode('utf-8'))
+            if (page and config.page_limit[lang] and \
+                page_length > 1024*config.page_limit[lang]) \
+                or (config.talkpage_limit[lang] and \
+                    page_length > 1024*config.talkpage_limit[lang]):
+                logging.warning("destination page {title} is too large for saving, {n:,} bytes, posting cancelled!".format(title=destPage.title(), n=page_length))
+                return(False)
+
+            # Create new page source by adding or replacing suggestions
+            newPageSource = self.addReplaceRecMessage(pageSource=pageSource,
+                                                      recMsg=recMsg,
+                                                      replace=replace)
+        except pywikibot.exceptions.IsRedirectPage:
+            logging.warning("destination page {title} is a redirect, posting cancelled".format(title=destPage.title()))
+            return(False)
+        except pywikibot.exceptions.NoPage:
+            pass
+
+        # if testing, print the proposed userpage
+        if config.testrun:
+            print("SuggestBot is doing a test run. Here's the new page:")
+            print(newPageSource)
+        else:
+            # Make an edit to save the new page contents...
+            try:
+                self.save_page(destPage, newPageSource,
+                               config.edit_comment[lang],
+                               force=force)
+            except PageNotSavedError:
+                return(False)
+
+        # OK, done
+        return(True)
+        
+    def recommend(self, username, userGroup="suggest", itemEnd=True,
+                  filterMinor=True, filterReverts=True, useUserlinks=False,
+                  recTemplate=None, force=False, page=None, replace=False,
+                  isRequest=False):
+        '''Get and post recommendations to the specific user based on the set
+           of options given (see getRecs() for specifics).
+
+           @param username: What user are we recommending articles to?
+           @type username: str
+
+           @param userGroup: Which user group does this user belong to?
+           @type userGroup: str
+           
+           @param itemEnd: Are we looking at their latest contributions or not?
+           @type itemEnd: bool
+
+           @param filterMinor: Filter out minor edits?
+           @type filterMinor: bool
+
+           @param filterReverts: Filter out reverts?
+           @type filterReverts: bool
+
+           @param useUserlinks: Mine the user page for links to important articles?
+           @type useUserlinks: bool
+
+           @param recTemplate: Title of the template to use as the recommendation post.
+           @type recTemplate: str
+
+           @param force: Ignore {{bots}} and {{nobots}} templates?
+                         (default of False is to adhere to those)
+           @type force: bool
+
+           @param page: Title of the page we will post recommendations to.
+                        If None, we post to the user's talk page.
+           @type page: str
+
+           @param replace: Controls whether we replace recs, or simply append them.
+           @type replace: bool
+
+           @param isRequest: Is this a one-time request (True), or a users who has signed
+                             up to receive recommendations regularly (False)?
+           @type isRequest: bool
+
+           '''
+        if not username:
+            logging.error("must supply username to do recommendations")
+            return(False)
+
+        # create user object
+        # FIXME: instead of passing usernames around, we can pass this user object
+        # around...
+        recUser = pywikibot.User(self.site, username)
+
+        # Check if the user is blocked.  Since that will aport posting, there's
+        # no need to spend time generating recommendations.
+        if recUser.isBlocked():
+            logging.warning("User:{username} is blocked, posting aborted".format(username=recUser.username))
+            return(False)
+
+        # What language are we posting to?
+        lang = config.wp_langcode
+
+        # Test if the destination page is too large, as we otherwise struggle
+        # with posting, getting timeouts.
+        if page:
+            destPage = pywikibot.Page(self.site, page)
+        else:
+            destPage = recUser.getUserTalkPage()
+
+        try:
+            pageSource = destPage.get()
+            page_length = len(pageSource.encode('utf-8'))
+            if (page and config.page_limit[lang] and \
+                page_length > 1024*config.page_limit[lang]) \
+                or (config.talkpage_limit[lang] and \
+                    page_length > 1024*config.talkpage_limit[lang]):
+                logging.warning("destination page {title} is too large for saving, {n:,} bytes, posting cancelled!".format(title=destPage.title(), n=page_length))
                 return(False)
         except pywikibot.exceptions.IsRedirectPage:
-            sys.stderr.write("SuggestBot Warning: Destination page {title} is a redirect, posting cancelled.\n".format(title=destPage.title()).encode('utf-8'))
+            logging.warning("destination page {title} is a redirect, posting cancelled".format(title=destPage.title()))
             return(False)
         except pywikibot.exceptions.NoPage:
             pass

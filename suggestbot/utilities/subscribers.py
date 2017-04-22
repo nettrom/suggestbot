@@ -809,8 +809,6 @@ class Subscribers:
             # subtract the modified last rec from today
             timelapse = now - modLastRec
 
-            print('time lapsed is {}'.format(timelapse))
-            
             # It's time to post recommendations if we're past this user's due
             # date, or if it's less than lookaheadTime seconds ahead.
             # This makes sure that we don't always bump users to the
