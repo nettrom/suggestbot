@@ -101,21 +101,24 @@ class InlinkTableUpdater:
                               'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts',
                               'hu': 'p50380g50553__ilc.huwiki_inlinkcounts',
                               'fa': 'p50380g50553__ilc.fawiki_inlinkcounts',
-                              'ru': 'p50380g50553__ilc.ruwiki_inlinkcounts'}
+                              'ru': 'p50380g50553__ilc.ruwiki_inlinkcounts',
+                              'fr': 'p50380g50553__ilc.frwiki_inlinkcounts'}
         self.wikidbNames = {'en': 'enwiki_p',
                             'no': 'nowiki_p',
                             'sv': 'svwiki_p',
                             'pt': 'ptwiki_p',
                             'hu': 'huwiki_p',
                             'fa': 'fawiki_p',
-                            'ru': 'ruwiki_p'}
-        self.hostnames = {'en': 'c3.labsdb',
+                            'ru': 'ruwiki_p',
+                            'fr': 'frwiki_p'}
+        self.hostnames = {'en': 'enwiki.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
                           'pt': 'ptwiki.labsdb',
                           'hu': 'huwiki.labsdb',
                           'fa': 'fawiki.labsdb',
-                          'ru': 'ruwiki.labsdb'}
+                          'ru': 'ruwiki.labsdb',
+                          'fr': 'frwiki.labsdb'}
 
     def dbConnect(self):
         '''
@@ -609,8 +612,8 @@ def main():
                                    sliceSize=args.slice);
 
     if not myUpdater.dbConnect():
-        logging.error("Unable to connect to database {db} on {host}, exiting!".format(db=self.wikidbNames[self.lang], host=self.hostnames[self.lang]));
-        return;
+        logging.error("Unable to connect to database {db} on {host}, exiting!".format(db=myUpdater.wikidbNames[self.lang], host=myUpdater.hostnames[self.lang]))
+        return
 
     try:
         # Try to set status of this language as running.

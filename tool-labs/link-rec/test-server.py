@@ -7,7 +7,7 @@ import sys;
 
 url = "http://tools.wmflabs.org/suggestbot/link-recommender.py"
 
-items = {u'Association football': 1,
+items_json = {u'Association football': 1,
               u'The Seems': 1,
               u'Ghost Whisperer (season 4)': 1,
               u'List of cats in the Tribe of Rushing Water': 1,
@@ -67,7 +67,7 @@ items = {u'Association football': 1,
               u'The Last Olympian': 1,
               u'List of SkyClan cats': 1};
 
-items_json = {"The Seems":1,"Ghost Whisperer (season 4)":1,"Indian cuisine":1,"Sunrise (Warriors)":1,"List of cats in the Tribe of Rushing Water":1,"Thalia Grace":1,"Victoria Holmes":1,"Dav Pilkey":1,"The Lightning Thief":1,"Starlight (Warriors)":1,"Long Shadows (Warriors)":1,"List of Percy Jackson and the Olympians terms":1,"Skender Vakuf City":1,"Moonrise (Warriors)":1,"Violin":1,"Firestar's Quest":1,"Bluestar's Prophecy":1,"The Shining (novel)":1,"Sunset (Warriors)":1,"Nico di Angelo":1,"The Sight (Warriors)":1,"Ranger's Apprentice":1,"Luke Castellan":1,"Outcast (Warriors)":1,"2012 in fiction":1,"The Fourth Apprentice (Warriors)":1,"The Demigod Files":1,"List of Warriors characters outside Clans":1,"Fading Echoes (Warriors)":1,"Poreotics":1,"List of ThunderClan cats":1,"Warriors (novel series)":1,"Dawn (Warriors)":1,"Bath City F.C.":1,"List of SkyClan cats":1,"The Last Olympian":1}
+# items_json = {"The Seems":1,"Ghost Whisperer (season 4)":1,"Indian cuisine":1,"Sunrise (Warriors)":1,"List of cats in the Tribe of Rushing Water":1,"Thalia Grace":1,"Victoria Holmes":1,"Dav Pilkey":1,"The Lightning Thief":1,"Starlight (Warriors)":1,"Long Shadows (Warriors)":1,"List of Percy Jackson and the Olympians terms":1,"Skender Vakuf City":1,"Moonrise (Warriors)":1,"Violin":1,"Firestar's Quest":1,"Bluestar's Prophecy":1,"The Shining (novel)":1,"Sunset (Warriors)":1,"Nico di Angelo":1,"The Sight (Warriors)":1,"Ranger's Apprentice":1,"Luke Castellan":1,"Outcast (Warriors)":1,"2012 in fiction":1,"The Fourth Apprentice (Warriors)":1,"The Demigod Files":1,"List of Warriors characters outside Clans":1,"Fading Echoes (Warriors)":1,"Poreotics":1,"List of ThunderClan cats":1,"Warriors (novel series)":1,"Dawn (Warriors)":1,"Bath City F.C.":1,"List of SkyClan cats":1,"The Last Olympian":1}
 testLang = u'en'
 
 # Some Norwegian articles
@@ -79,8 +79,8 @@ testLang = u'en'
 #               u"Micke Dubois":1, u"HMS Grundsund (15)":1};
 # testLang = u'sv'
 
-items_json = {u"Findus":1,u"Findus":1,u"Åhléns":1,u"Folkets Hus och Parker":1,u"Mustang (spårvagn)":1,u"Bräckelinjen":1,u"Lundby landskommun":1,u"Lundby landskommun":1,u"Lundby socken, Västergötland":1,u"Hisingsbron":1,u"Klippan, Göteborg":1,u"Hisingsbron":1,u"Ryttarens torvströfabrik":1,u"Rydals museum":1,u"Samuel Owen":1,u"Per Murén":1,u"William Lindberg":1,u"Robert Almström":1,u"David Otto Francke":1,u"William Chalmers":1,u"Alexander Keiller":1,u"Sven Erikson":1,u"Rydahls Manufaktur":1,u"Rydals Manufaktur":1,u"Rydals museum":1,u"Rydals museum":1,u"Rydals museum":1,u"Freedom Flotilla":1,u"Generalmönsterrulla":1,u"Generalmönstring":1,u"Julia Cæsar":1,u"Buskteater":1,u"Buskis":1,u"Persontåg":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Lia Schubert-van der Bergen":1,u"Johanna von Lantingshausen":1,u"Gustav Gustavsson av Wasa":1,u"Fredrika av Baden":1,u"Ulrika Eleonora von Berchner":1,u"Ulla von Höpken":1,u"Stig T. Karlsson":1,u"Tony Adams":1,u"Zofia Potocka":1,u"Lena Möller":1,u"Lena Möller":1,u"Novak Đoković":1,u"Historiska kartor över Stockholm":1,u"Afrikanska barbetter":1,u"Aldosteron":1,u"Cyklooxygenas":1,u"Isoenzym":1,u"Proenzym":1,u"Strix (släkte)":1,u"Simsnäppor":1,u"Salskrake":1,u"Jim Dine":1,u"Fostervatten":1,u"Svensk arkitektur":1,u"Kuba":1,u"Rune Gustafsson":1,u"Föreningen för Stockholms fasta försvar":1,u"Carl Johan Billmark":1,u"Carl Johan Billmark":1,u"Alfred Rudolf Lundgren":1,u"Alfred Bentzer":1,u"Svenska Brukarföreningen":1,u"Karl August Nicander":1,};
-testLang = u'sv'
+# items_json = {u"Findus":1,u"Findus":1,u"Åhléns":1,u"Folkets Hus och Parker":1,u"Mustang (spårvagn)":1,u"Bräckelinjen":1,u"Lundby landskommun":1,u"Lundby landskommun":1,u"Lundby socken, Västergötland":1,u"Hisingsbron":1,u"Klippan, Göteborg":1,u"Hisingsbron":1,u"Ryttarens torvströfabrik":1,u"Rydals museum":1,u"Samuel Owen":1,u"Per Murén":1,u"William Lindberg":1,u"Robert Almström":1,u"David Otto Francke":1,u"William Chalmers":1,u"Alexander Keiller":1,u"Sven Erikson":1,u"Rydahls Manufaktur":1,u"Rydals Manufaktur":1,u"Rydals museum":1,u"Rydals museum":1,u"Rydals museum":1,u"Freedom Flotilla":1,u"Generalmönsterrulla":1,u"Generalmönstring":1,u"Julia Cæsar":1,u"Buskteater":1,u"Buskis":1,u"Persontåg":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Mustang (spårvagn)":1,u"Lia Schubert-van der Bergen":1,u"Johanna von Lantingshausen":1,u"Gustav Gustavsson av Wasa":1,u"Fredrika av Baden":1,u"Ulrika Eleonora von Berchner":1,u"Ulla von Höpken":1,u"Stig T. Karlsson":1,u"Tony Adams":1,u"Zofia Potocka":1,u"Lena Möller":1,u"Lena Möller":1,u"Novak Đoković":1,u"Historiska kartor över Stockholm":1,u"Afrikanska barbetter":1,u"Aldosteron":1,u"Cyklooxygenas":1,u"Isoenzym":1,u"Proenzym":1,u"Strix (släkte)":1,u"Simsnäppor":1,u"Salskrake":1,u"Jim Dine":1,u"Fostervatten":1,u"Svensk arkitektur":1,u"Kuba":1,u"Rune Gustafsson":1,u"Föreningen för Stockholms fasta försvar":1,u"Carl Johan Billmark":1,u"Carl Johan Billmark":1,u"Alfred Rudolf Lundgren":1,u"Alfred Bentzer":1,u"Svenska Brukarföreningen":1,u"Karl August Nicander":1,};
+# testLang = u'sv'
 
 # items_json = {
 #     u"باشگاه فوتبال بوکا جونیورز": 1,
@@ -98,14 +98,14 @@ testLang = u'sv'
 #     }
 # testLang = u"hu";
 
-items_json = {
-    u'Гонконг': 1,
-    u'Китайская Народная Республика': 1,
-    u'Ли, Брюс': 1,
-    u'Международный коммерческий центр': 1,
-    u'Международный финансовый центр': 1
-}
-testLang = u'ru'
+#items_json = {
+#    u'Гонконг': 1,
+#    u'Китайская Народная Республика': 1,
+#    u'Ли, Брюс': 1,
+#    u'Международный коммерческий центр': 1,
+#    u'Международный финансовый центр': 1
+#}
+#testLang = u'ru'
 
 params = {'lang': testLang,
           'nrecs': 2500};

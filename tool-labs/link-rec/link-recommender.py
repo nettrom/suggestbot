@@ -111,14 +111,16 @@ class LinkRecommender():
                         'pt': 'ptwiki_p',
                         'hu': 'huwiki_p',
                         'fa': 'fawiki_p',
-                        'ru': 'ruwiki_p'}
-        self.hostnames = {'en': 'c3.labsdb',
+                        'ru': 'ruwiki_p',
+                        'fr': 'frwiki_p'}
+        self.hostnames = {'en': 'enwiki.labsdb',
                           'no': 'nowiki.labsdb',
                           'sv': 'svwiki.labsdb',
                           'pt': 'ptwiki.labsdb',
                           'hu': 'huwiki.labsdb',
                           'fa': 'fawiki.labsdb',
-                          'ru': 'ruwiki.labsdb'}
+                          'ru': 'ruwiki.labsdb',
+                          'fr': 'frwiki.labsdb'}
         # Table name of the inlink count table in our user database.
         self.tableNames = {'en': 'p50380g50553__ilc.enwiki_inlinkcounts',
                            'no': 'p50380g50553__ilc.nowiki_inlinkcounts',
@@ -126,7 +128,8 @@ class LinkRecommender():
                            'pt': 'p50380g50553__ilc.ptwiki_inlinkcounts',
                            'hu': 'p50380g50553__ilc.huwiki_inlinkcounts',
                            'fa': 'p50380g50553__ilc.fawiki_inlinkcounts',
-                           'ru': 'p50380g50553__ilc.ruwiki_inlinkcounts'}
+                           'ru': 'p50380g50553__ilc.ruwiki_inlinkcounts',
+                           'fr': 'p50380g50553__ilc.frwiki_inlinkcounts'}
 
         self.dbConn = None
         self.dbCursor = None
@@ -139,13 +142,16 @@ class LinkRecommender():
         # Also note that Swedish and Norwegian Wikipedia specify dates as "xx. Januar" rather
         # than "January 1" as they do in English.
         self.months = {
-            u'en': ur'January|February|March|April|May|June|July|August|September|October|November|December',
+            u'en': ur'(January|February|March|April|May|June|July|August|September|October|November|December)[ _]\d+',
             u'no': ur'\d+\.[ _]+(:[Jj]anuar|[Ff]ebruar|[Mm]ars|[Aa]pril|[Mm]ai|[Jj]uni|[Jj]uli|[Aa]ugust|[Ss]eptember|[Oo]ktober|[Nn]ovember|[Dd]esember)',
             u'sv': ur'\d+\.[ _]+(:[Jj]anuari|[Ff]ebruari|[Mm]ars|[Aa]pril|[Mm]aj|[Jj]uni|[Jj]uli|[Aa]ugusti|[Ss]eptember|[Oo]ktober|[Nn]ovember|[Dd]ecember)',
             u'pt': ur'\d+[ _]+de[ _]+(:[Jj]aneiro|[Ff]evereiro|[Mm]arço|[Aa]bril|[Mm]aio|[Jj]unho|[Jj]ulho|[Aa]gosto|[Ss]etembro|[Oo]utubro|[Nn]ovembro|[Dd]ezembro)',
             u'hu': ur'Január|Február|Március|Április|Május|Június|Július|Augusztus|Szeptember|Október|November|December',
             u'fa': 'دسامب|نوامب|اکتب|سپتامب|اوت|ژوئی|ژوئن|مه|آوریل|مارس|فوریه|ژانویه',
-            u'ru': ur'(:Январь|Февраль|Март|Апрель|Май|Июнь|Июль|Август|Сентябрь|Октябрь|Ноябрь|Декабрь)|(:\d+[ _]+(:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря))'
+            u'ru': ur'(:Январь|Февраль|Март|Апрель|Май|Июнь|Июль|Август|Сентябрь|Октябрь|Ноябрь|Декабрь)|(:\d+[ _]+(:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря))',
+            ## Note the negative lookahead (?! ...) to allow us to match
+            ## the actual months, but not dates.
+            u'fr': ur'(\d+[ _](?!.*[ _]\d+$))?([Jj]anvier|[Ff]évrier|[Mm]ars|[Aa]vril|[Mm]ai|[Jj]uin|[Jj]uillet|[Aa]oût|[Ss]eptembre|[Oo]ctobre|[Nn]ovembre|[Dd]écembre)(\d+)?',
             }
 
         # Note: compatible with both ' '  and '_' as spaces
@@ -156,7 +162,8 @@ class LinkRecommender():
             u'pt': ur'^Lista[ _]de[ _]',
             u'hu': ur'[ _]listája$',
             u'fa': ur'^فهرست',
-            u'ru': ur'(^Список|(:Алфавитный[ _]|Хронологический[ _])список)|—[ _]список'
+            u'ru': ur'(^Список|(:Алфавитный[ _]|Хронологический[ _])список)|—[ _]список',
+            u'fr': ur"[Ll]iste[ _]d[e']",
             }
 
         # Compile the regular expressions
@@ -468,21 +475,19 @@ def app(envir, start_response):
     start_response('200 OK', [('Content-type', 'application/json; charset=UTF-8')]);
     
     if 'items' not in formdata or 'params' not in formdata:
-        yield json_helper.getError(400, 'Bad Request: Items or parameters not supplied');
-        return;
+        return(json_helper.getError(400, 'Bad Request: Items or parameters not supplied'))
 
     try:
         req_items = unicode(formdata['items'].value, 'utf-8', errors='strict');
         req_params = unicode(formdata['params'].value, 'utf-8', errors='strict');
     except UnicodeDecodeError, e:
-	yield json_helper.getError(500, 'Unable to decode items or params.');
-
+	return(json_helper.getError(500, 'Unable to decode items or params.'))
 
     try:
         req_items = json.loads(req_items);
         req_params = json.loads(req_params);
     except:
-        yield json_helper.getError(500, 'Unable to decode message as JSON.');
+        return(json_helper.getError(500, 'Unable to decode message as JSON.'))
 
     try:
         nrecs_param = int(req_params['nrecs']);
@@ -493,21 +498,22 @@ def app(envir, start_response):
 	                              nrecs=nrecs_param);
 
     if not recommender.checkLang():
-	yield json_helper.getError(501, 'Error: Language not supported.');
+	return(json_helper.getError(501, 'Error: Language not supported.'))
 
     if not recommender.checkNrecs():
-        yield json_helper.getError(413, 'Error: Requested too many recommendations.');
+        return(json_helper.getError(413, 'Error: Requested too many recommendations.'))
 
     if not recommender.connect():
-        yield json_helper.getError(500, 'Error: Unable to connect to database servers.');
+        return(json_helper.getError(500, 'Error: Unable to connect to database servers.'))
 
     # Check that both item_map and param_map are dictionaries
     if (not isinstance(req_items, dict)) or (not isinstance(req_params, dict)):
-        yield json_helper.getError(400, 'Error: Items and params not dictionaries.');
+        return(json_helper.getError(400, 'Error: Items and params not dictionaries.'))
 
     recs = recommender.get_recs(item_map=req_items, param_map=req_params);
     recommender.close();
-    yield json_helper.getSuccess(recs);
+    del recommender # done, can be GC'ed if possible
+    return(json_helper.getSuccess(recs))
 
 # Test code, uncomment and run from command line to verify functionality
 #if __name__ == "__main__":

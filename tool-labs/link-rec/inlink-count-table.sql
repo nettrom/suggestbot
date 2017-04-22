@@ -1,4 +1,4 @@
-CUSE p50380g50553__ilc;
+USE p50380g50553__ilc;
 
 -- Format of the inlink count table used by links-server.py
 CREATE TABLE enwiki_inlinkcounts (
@@ -11,7 +11,7 @@ CREATE TABLE inlinkcount_updates (
        ilcu_lang VARCHAR(16) NOT NULL PRIMARY KEY, -- language code
        ilcu_timestamp DATETIME, -- timestamp of last edited page read
        ilcu_update_running TINYINT DEFAULT 0 -- set if this wiki is currently being updated
-) ENGINE=InnoDB
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
 
 -- Insert default values for English Wikipedia where that is hosted
 INSERT INTO inlinkcount_updates
