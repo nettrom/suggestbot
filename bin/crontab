@@ -1,0 +1,71 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# For reference:
+# m h dom mon dow   command
+
+# Every day at 23:15, start updating list of regular users on Persian
+# Wikipedia, and post recommendations to those who are due
+15 23 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh fa
+
+# Every day at 23:45, start updating list of regular users on Russian
+# Wikipedia, and post recommendations to those who are due
+45 23 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh ru
+
+## Every day at 02:15, start updating list of regular users on French
+## Wikipedia, and post recommendations to those who are due
+15 02 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh fr
+
+# Every day at 03:15, start updating list of regular users on Norwegian
+# Wikipedia, and post recommendations to those who are due
+15 03 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh no
+
+# Every day at 04:15, start updating list of regular users on Portuguese
+# Wikipedia, and post recommendations to those who are due
+15 04 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh pt
+
+# Every day at 05:15, start updating list of regular users on Swedish
+# Wikipedia, and post recommendations to those who are due
+15 04 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh sv
+
+# Every day at 06:15 and 18:15, start updating list of regular users on English
+# Wikipedia, and post recommendations to those who are due
+15 6,18 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh en
+
+# Every Monday at 01:01, start updating the category data for
+# English Wikipedia
+01 01 * * mon /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh en
+
+# Every Monday at 12:01, update category data for Portuguese Wikipedia
+01 12 * * mon /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh pt
+
+# Every Sunday at 20:01, start doing the same for Norwegian Wikipedia
+01 20 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh no
+
+# Every Sunday at 19:01, start doing the same for Swedish Wikipedia
+01 19 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh sv
+
+# Every Sunday at 18:01, start doing the same for Russian Wikipedia
+01 18 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh ru
+
+# Every Sunday at 17:01, start doing the same for Persian Wikipedia
+01 17 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh fa
+
+# Every Sunday at 16:01, start doing the same for French Wikipedia
+01 16 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh fr
+
+# Every few hours, update the revision tables of English, Russian, Swedish,
+# French, and Portuguese.  Once a day, shortly after midnight, update
+# the revision tables of Norwegian, Persian, and Hungarian
+41 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh pt > /dev/null 2&>1
+51 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh en > /dev/null 2&>1
+11 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh sv > /dev/null 2&>1
+21 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh ru > /dev/null 2&>1
+31 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh en > /dev/null 2&>1
+01 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh fr > /dev/null 2&>1
+5 0 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh no > /dev/null 2&>1
+10 0 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh fa > /dev/null 2&>1
+# 45 0 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh hu > /dev/null 2&>1
+
+## Every day at midnight and noon, update the statistics table with counts of number of users
+1 0,12 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/generate-stats.sh > /dev/null 2&>1
