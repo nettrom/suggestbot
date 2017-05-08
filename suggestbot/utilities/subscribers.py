@@ -213,7 +213,8 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
             if username == self.site.user():
                 logging.debug("found SBot contribution at time {timestamp}".format(timestamp=edittime.strftime("%Y%m%d%H%M%S")))
                 edited = edittime
-                i += 1
+                
+            i += 1
 
         return(edited)
                 
@@ -251,9 +252,9 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
 
         # Note: the subpage will always have a history because otherwise
         # the user couldn't have put the SuggestBot template there.
-        if self.page_title is not None:
+        if self._page_title is not None:
             subpage_edit = self._sbot_edited(pywikibot.Page(
-                self.title, self.page_title))
+                self.title(), self._page_title))
             
         usertalkpage = self.getUserTalkPage()
         if usertalkpage.exists():
@@ -265,7 +266,7 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
             self.last_rec = usertalkpage_edit.strftime("%Y%m%d%H%M%S")
         elif subpage_edit is not None:
             logging.debug("using edit to {} as last rec timestamp".format(
-                self.page_title))
+                self._page_title))
             self.last_rec = subpage_edit.strftime("%Y%m%d%H%M%S")
         elif subpage_edit is not None and usertalkpage_edit is not None:
             # If both are not None, then use the more recent one:
@@ -300,7 +301,7 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
                     dbconn.rollback()
                 else:
                     dbconn.commit()
-                    done = true
+                    done = True
             except MySQLdb.Error as e:
                 logging.error("unable to store User:{username}' in database".format(username=self._username).encode('utf-8'))
                 logging.error("MySQL Error {}: {}".format(e.args[0], e.args[1]))
@@ -310,7 +311,7 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
                     sbdb.connect()
                     (dbconn, dbcursor) = sbdb.getConnection()
 
-        logging.info("Inserted the following new user:\n{}".format(self))
+        logging.info("inserted the following new user:\n{}".format(self))
                     
         # ok, done
         return(True)
@@ -423,7 +424,7 @@ class Subscribers:
 
         params = config.template_parameters[self._lang]
         if not key in params:
-            logging.error('got key {} which does not translate to anything.'.format(key))
+            logging.warning('got key {} which does not translate to anything.'.format(key))
             return(None)
 
         # Return the global name
