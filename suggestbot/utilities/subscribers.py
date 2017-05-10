@@ -253,8 +253,8 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
         # Note: the subpage will always have a history because otherwise
         # the user couldn't have put the SuggestBot template there.
         if self._page_title is not None:
-            subpage_edit = self._sbot_edited(pywikibot.Page(
-                self.title(), self._page_title))
+            subpage_edit = self._sbot_edited(pywikibot.Page(self._site,
+                                                            self._page_title))
             
         usertalkpage = self.getUserTalkPage()
         if usertalkpage.exists():
