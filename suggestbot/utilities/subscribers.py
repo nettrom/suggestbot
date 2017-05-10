@@ -586,8 +586,8 @@ class Subscribers:
 
                     # This accounts for the case where a user has a subpage for
                     # their userboxes.  We'll post to their user talk page.
-                    if subpageTitle is not None \
-                            and template_name == configTemplates['userbox']:
+                    if subpageTitle is not None and template_name \
+                       == configTemplates['userbox'].strip().lower():
                         subpageTitle = None
 
                     # for each parameter...
