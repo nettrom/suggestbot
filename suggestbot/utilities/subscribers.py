@@ -592,16 +592,28 @@ class Subscribers:
 
                     # for each parameter...
                     for param in template.params:
-                        # translate the key (e.g. Norwegian -> English)
-                        translatedKey = self._translate_key(param.name.strip().lower())
+                        ## True if this is a key/value pair
+                        if param.showkey:
+                            # translate the key (e.g. Norwegian -> English)
+                            translatedKey = self._translate_key(
+                                param.name.strip().lower())
+                        else:
+                             translatedKey = self._translate_key(
+                                 param.value.strip().lower())
+
                         if translatedKey is None:
                             warningsList.append((page, "unaccepted parameter"))
                             continue
 
                         ## logging.info("using parameter {} with value {}".format(translatedKey, param.value))
-                        
-                        # parameter is OK, use it:
-                        subscriber.useParam(translatedKey, param.value.strip().lower())
+
+                        if param.showkey:
+                            # parameter is OK, use it:
+                            subscriber.useParam(translatedKey, param.value.strip().lower())
+                        else:
+                            ## Note: This works because the methods behave
+                            ## sensibly if the value evaluates to False
+                            subscriber.useParam(translatedKey, "")
                         
                 # Always updating this ensures that we capture users who return
                 # and do not specify where they want it posted.
