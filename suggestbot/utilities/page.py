@@ -224,10 +224,10 @@ class Page(pywikibot.Page):
                                                           "aaa", wikitext)]))
         for observation in observations:
             try:
-                ratings.append(self._wp10_scale[observation['label']])
+                ratings.append(self._wp10_scale[observation['wp10']])
             except KeyError:
                 pass # invalid rating
-                
+
         if ratings:
             # set rating to the highest rating, but the str, not ints
             rating = {v: k for k, v in self._wp10_scale.items()}[max(ratings)]
@@ -315,8 +315,14 @@ class Page(pywikibot.Page):
         '''
         Populate quality metrics used for task suggestions.
         '''
-        
-        qualfeatures = qm.get_qualfeatures(self.get())
+
+        try:
+            qualfeatures = qm.get_qualfeatures(self.get())
+        except pywikibot.NoPage:
+            return()
+        except pywikibot.IsRedirectPage:
+            return()
+
         # 1: length
         self._qualdata['length'] = log(qualfeatures.length, 2)
         # 2: lengthToRefs

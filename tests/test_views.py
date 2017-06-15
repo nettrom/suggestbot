@@ -1,3 +1,6 @@
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 # Test get_views() method using the pageview API
 import pywikibot
 from suggestbot.utilities.page import Page

@@ -2,3 +2,5 @@ mwparserfromhell
 pywikibot
 requests
 wikiclass
+docopt
+nltk
