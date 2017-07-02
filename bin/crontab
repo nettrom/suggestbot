@@ -34,25 +34,25 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # Every Monday at 01:01, start updating the category data for
 # English Wikipedia
-01 01 * * mon /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh en
+01 01 * * mon /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh en
 
 # Every Monday at 12:01, update category data for Portuguese Wikipedia
-01 12 * * mon /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh pt
+01 12 * * mon /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh pt
 
 # Every Sunday at 20:01, start doing the same for Norwegian Wikipedia
-01 20 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh no
+01 20 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh no
 
 # Every Sunday at 19:01, start doing the same for Swedish Wikipedia
-01 19 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh sv
+01 19 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh sv
 
 # Every Sunday at 18:01, start doing the same for Russian Wikipedia
-01 18 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh ru
+01 18 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh ru
 
 # Every Sunday at 17:01, start doing the same for Persian Wikipedia
-01 17 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh fa
+01 17 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh fa
 
 # Every Sunday at 16:01, start doing the same for French Wikipedia
-01 16 * * sun /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-categories-cronjob.sh fr
+01 16 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh fr
 
 # Every few hours, update the revision tables of English, Russian, Swedish,
 # French, and Portuguese.  Once a day, shortly after midnight, update

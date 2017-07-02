@@ -485,7 +485,7 @@ tasks = {
             'exclusion': None,
             },
         },
-    u'fr': {
+    'fr': {
         'STUB': {
             'categories': [],
             'recurseCategories': {u"Catégorie d'ébauche": 5},
@@ -714,8 +714,8 @@ template_stoplist = {
             'Участник:SuggestBot/Регулярные рекомендации' ],
     'fr': [ 'Utilisateur:SuggestBot/config',
             'Utilisateur:SuggestBot/Souscrire'],
-    'fa': [u'کاربر:SuggestBot/config',
-           u'کاربر:SuggestBot/Getting suggestions regularly', ],
+    'fa': ['کاربر:SuggestBot/config',
+           'کاربر:SuggestBot/Getting suggestions regularly', ],
     }
 
 # Request templates used in the WP:Teahouse experiment
@@ -952,7 +952,7 @@ rec_header_re = {
     'pt': 'Artigos que você gostaria de editar, de SuggestBot',
     'ru': 'Статьи, которые Вам возможно захочется исправить, от SuggestBot',
     'fa': 'مقاله‌های پیشنهادی توسط ربات پیشنهاددهنده',
-    'fr': u'SuggestBot vous propose…'
+    'fr': 'SuggestBot vous propose…'
     }
 
 # Dictionarly holding lists of titles of subsections of SuggestBot's

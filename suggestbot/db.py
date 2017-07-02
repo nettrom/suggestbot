@@ -21,14 +21,39 @@ Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 Boston, MA  02110-1301, USA.
 '''
 
-from __future__ import with_statement;
-
-__version__ = "$Id$";
-
-import logging
-import MySQLdb
+__version__ = "$Id$"
 
 import os
+import logging
+
+import MySQLdb
+import MySQLdb.cursors
+
+ctypes = {'dict': MySQLdb.cursors.DictCursor,
+          'ss': MySQLdb.cursors.SSCursor,
+          'ssdict': MySQLdb.cursors.SSDictCursor,
+          'default': MySQLdb.cursors.Cursor
+          }
+
+def cursor(connection, cursor_type=None):
+    '''
+    Get a cursor connected to the given database connection.
+
+    :param connection: an open database connection
+    :type MySQLdb.Connection
+
+    :param cursor_type: type of cursor we want back, one of either:
+                        'dict': MySQLdb.cursor.DictCursor
+                        'ss': MySQLdb.cursor.SSCursor
+                        'ssdict': MySQLdb.cursor.SSDictCursor
+                        if no type is specified, the default
+                        (MySQLdb.cursors.Cursor) is returned
+    :type cursor_type: str
+    '''
+
+    if cursor_type is None:
+        cursor_type = 'default'
+    return(connection.cursor(ctypes[cursor_type]))
 
 class SuggestBotDatabase:
     def __init__(self, default_file='my.cnf'):
