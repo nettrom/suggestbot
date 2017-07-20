@@ -378,10 +378,10 @@ tasks = {
             'exclusion': None,
             },
         'IMAGES': {
-            'categories': ['Википедия:Статьи без иллюстраций'],
-            'recurseCategories': {},
-            'inclusion': None,
-            'exclusion': None,
+            'categories': [],
+            'recurseCategories': {'Википедия:Статьи без иллюстраций': 3},
+            'inclusion': 'Статьи без изображений',
+            'exclusion': stub_re['ru'],
             },
         'CLEANUP': {
             'categories': ['Википедия:Статьи к переработке'],
