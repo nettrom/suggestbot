@@ -57,15 +57,13 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Every few hours, update the revision tables of English, Russian, Swedish,
 # French, and Portuguese.  Once a day, shortly after midnight, update
 # the revision tables of Norwegian, Persian, and Hungarian
-41 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh pt > /dev/null 2&>1
-51 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh en > /dev/null 2&>1
-11 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh sv > /dev/null 2&>1
-21 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh ru > /dev/null 2&>1
-31 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh en > /dev/null 2&>1
-01 */3 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh fr > /dev/null 2&>1
-5 0 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh no > /dev/null 2&>1
-10 0 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh fa > /dev/null 2&>1
-# 45 0 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/update-revisions.sh hu > /dev/null 2&>1
+51 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh en > /dev/null 2&>1
+41 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh pt > /dev/null 2&>1
+21 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh ru > /dev/null 2&>1
+11 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh sv > /dev/null 2&>1
+01 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh fr > /dev/null 2&>1
+5 0 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh no > /dev/null 2&>1
+10 0 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh fa > /dev/null 2&>1
 
 ## Every day at midnight and noon, update the statistics table with counts of number of users
 1 0,12 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/generate-stats.sh > /dev/null 2&>1
