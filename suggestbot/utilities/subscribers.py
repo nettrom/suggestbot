@@ -798,7 +798,7 @@ class Subscribers:
             # if lastRec is None (NULL), they didn't receive any recs earlier,
             # which means it's definitely time to post.
             if not lastRec:
-                print('lastRec is None/False, adding user')
+                ## print('lastRec is None/False, adding user')
                 userQueue.append({'username': username,
                                   'page': pagetitle,
                                   'replace': replace,
