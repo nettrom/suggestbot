@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Program to update a list of open tasks for a Wikipedia.
-Copyright (C) 2012-2016 SuggestBot dev group
+Copyright (C) 2012-2014 SuggestBot dev group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -84,10 +84,6 @@ class OpenTaskUpdater:
 		self.taskPage = u"Wikipedia:Community portal/Opentask"
 		if taskPage:
 			self.taskPage = taskPage
-
-                if not isinstance(self.taskPage, unicode):
-                        self.taskPage = unicode(self.taskPage, 'utf-8',
-                                                errors='strict')
 
 		if taskDef:
 			self.taskDef = taskDef
@@ -359,7 +355,7 @@ class OpenTaskUpdater:
 
 	def findAllPages(self, category=None):
 		"""
-		Use the database to fetch all Main & Talk namespace pages from
+		Use the database to fetch all main namespace pages from
 		a given category.  Expects a working database connection
 		to exist as self.dbConn
 
@@ -373,14 +369,14 @@ class OpenTaskUpdater:
 
 		logging.info(u"finding all pages in category {cat}".format(cat=category).encode('utf-8'))
 
-                foundPages = []
 		attempts = 0
 		while attempts < self.maxDBQueryAttempts:
 			try:
+				foundPages = []
 				dbCursor = self.dbConn.cursor()
 				dbCursor.execute(self.getAllPagesQuery,
 						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  0) # Main ns
+						  0) # ns
 						 )
 				for (pageId, pageTitle) in dbCursor:
 					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
@@ -397,31 +393,6 @@ class OpenTaskUpdater:
 				break
 		if attempts >= self.maxDBQueryAttempts:
 			logging.error(u"exhausted number of query attempts")
-
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(self.getAllPagesQuery,
-						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  1) # Talk ns
-						 )
-				for (pageId, pageTitle) in dbCursor:
-					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
-								  'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1
-				logging.error("unable to execute query to get pages from this category, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error(u"exhausted number of query attempts")
-
 
 		logging.info(u"found {n} pages in this category".format(n=len(foundPages)))
 		return foundPages
@@ -478,60 +449,6 @@ class OpenTaskUpdater:
 				foundPages = foundPages.union(subCatPages)
 
 		return foundPages
-
-	def findSubSubcategoryPages(self, category=None):
-		"""
-		Use the database to retrieve all first descendant
-		sub-categories of the given category.  Then find all pages
-		in direct subcategories of these categories.
-
-		@param category: Name of the category from which we'll
-		                 grab sub-subcategories.
-		@type category: unicode
-		"""
-
-		if not category:
-			logging.error(u"unable to find sub-categories in a given category without a category name")
-			return None
-
-		logging.info(u"finding all pages from second descendants of category {cat}".format(cat=category).encode('utf-8'))
-
-		subCategories = []
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(self.getAllPagesQuery,
-						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  14) # ns (14=Category)
-						 )
-				for (pageId, pageTitle) in dbCursor:
-					subCategories.append(unicode(re.sub('_', ' ', pageTitle),
-								     'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1;
-				logging.error("unable to execute query to get sub-categories from this category, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error(u"exhausted number of query attempts")
-			return []
-
-		logging.info(u"found {n} sub-categories in this category".format(n=len(subCategories)))
-		
-		foundPages = set()
-		for categoryName in subCategories:
-			subCatPages = self.findSubcategoryPages(category=categoryName)
-			if subCatPages:
-				foundPages = foundPages.union(subCatPages)
-
-		return foundPages
-
 
 	def findRandomPages(self, category=None, nPages=5):
 		"""
@@ -606,14 +523,8 @@ class OpenTaskUpdater:
 			# Create a set of all pages we find,
 			# from which we'll randomly sample.
 			foundPages = set()
-			if isinstance(category, list) \
-                           and category[0] == 'use-subs':
-                                foundPages = self.findSubcategoryPages(category=category[1])
-                        elif isinstance(category, list) \
-                             and category[0] == 'use-subsubs':
-                                foundPages = self.findSubSubcategoryPages(category=category[1])
-                        elif isinstance(category, list):
-                                for catName in category:
+			if isinstance(category, list):
+				for catName in category:
 					if isinstance(catName, unicode):
 						foundPages = foundPages.union(self.findAllPages(category=catName))
 					elif isinstance(catName, tuple):
@@ -640,7 +551,7 @@ class OpenTaskUpdater:
 		logging.info("connecting to {lang}wiki".format(lang=self.lang))
 
 		wikiSite = pywikibot.getSite(self.lang)
-		wikiSite.login()
+		# wikiSite.login()
 
 		# Did we log in?
 		if wikiSite.username() is None:
@@ -657,11 +568,11 @@ class OpenTaskUpdater:
 		# Lets deal with stubs first, where we'll pick random stub
 		# categories until we have enough
 		# (self.numPages) pages from those
-                if 'stub' in self.foundTasks:
-                        logging.info("finding stub tasks...")
-                        self.foundTasks['stub'] = self.findStubs(category=self.taskDef['stub'],
-                                                                 nPages=self.numPages)
-                        logging.info("done finding stub tasks");
+		logging.info("finding stub tasks...")
+		self.foundTasks['stub'] = self.findStubs(category=self.taskDef['stub'],
+							 nPages=self.numPages)
+
+		logging.info("done finding stub tasks");
 
 		# Handle relisted AfDs, they use a slightly different query
 		if "afdrelist" in self.taskDef:
@@ -703,7 +614,7 @@ class OpenTaskUpdater:
 					self.foundTasks[taskId] = u"\n".join([u"* [[{prefix}{fulltitle}|{linktitle}]]".format(prefix=self.taskDef['afdrelist']['prefix'], fulltitle=page, linktitle=re.sub(stripPattern, u"", page)) for page in pageList])
 
 				else:
-					self.foundTasks[taskId] = u"\n".join([u"* {title}".format(title=pywikibot.Page(wikiSite, page).title(asLink=True, insite=wikiSite)) for page in pageList])
+					self.foundTasks[taskId] = u"\n".join([u"* {title}".format(title=pywikibot.Page(wikiSite, page).title(asLink=True)) for page in pageList])
 
 		logging.info(u"turned page titles into page links, getting wikitext of page {taskpage}".format(taskpage=self.taskPage).encode('utf-8'))
 
@@ -726,7 +637,7 @@ class OpenTaskUpdater:
 		for (taskId, pageList) in self.foundTasks.iteritems():
 			# note: using re.DOTALL because we need .*? to match \n
 			#       since our content is a list
-			tasktext = re.sub(ur'<div\s+id="{taskid}"\s*>(.*?)</div>'.format(taskid=taskId),
+			tasktext = re.sub(ur'<div id="{taskid}">(.*?)</div>'.format(taskid=taskId),
 					  ur'<div id="{taskid}">\n{pagelist}</div>'.format(taskid=taskId, pagelist=pageList),
 					  tasktext, flags=re.DOTALL)
 
@@ -766,9 +677,9 @@ def main():
 	cli_parser.add_argument('-c', '--comment', default=None,
 				help="edit comment to use when saving the new page")
 
-	# Option to read the list of tasks (as JSON) from a file
-	cli_parser.add_argument('-f', '--taskfile', default=None,
-				help="path to file containing task definition in JSON format")
+	# Option to control the list of tasks
+	cli_parser.add_argument('-d', '--taskdef', default=None,
+				help="repr of dictionary mapping task IDs to task categories")
 
 	# Option to control language
 	cli_parser.add_argument('-l', '--lang', default=u'en',
@@ -799,21 +710,9 @@ def main():
 	if args.verbose:
 		logging.basicConfig(level=logging.DEBUG)
 
-        if args.taskfile:
-                import codecs
-                import json
-                try:
-                        with codecs.open(args.taskfile, 'r', 'utf-8') as infile:
-                                args.taskdef = json.load(infile)
-                except IOError:
-                        logging.error('Unable to open task definition file {0}, cannot continue'.format(args.taskfile))
-                        return()
-                except:
-                        logging.error('Unable to parse task definition file {0} as JSON, cannot continue'.format(args.taskfile))
-                        return()
-        else:
-                args.taskdef = None
-                        
+	if args.taskdef:
+		args.taskdef = eval(args.taskdef)
+
 	taskUpdater = OpenTaskUpdater(lang=args.lang,
 				      mysqlConf=args.mysqlconf,
 				      taskPage=args.page,
