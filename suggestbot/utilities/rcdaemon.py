@@ -53,9 +53,9 @@ class RecentChangesDaemon:
         '''
 
         # Query to get the most recent edit in a given revision table...
-        most_ecent_query = """SELECT
-                              MAX(rev_timestamp) AS mostrecent
-                              FROM {}"""
+        most_recent_query = """SELECT
+                               MAX(rev_timestamp) AS mostrecent
+                               FROM {}"""
 
         logging.info("registering signal handler for SIGUSR1")
 
@@ -324,15 +324,16 @@ class RecentChangesDaemon:
 
             # push revision data for later updating.
             try:
-                db_cursor.execute(insert_query, {'revid': revdata['revid'],
-                                                 'title': revdata['title'],
-                                                 'username': revdata['user'],
-                                                 'timestamp': timestamp,
-                                                 'length': length,
-                                                 'delta': delta_length,
-                                                 'identical': is_identical,
-                                                 'revert': is_revert,
-                                                 'minor': is_minor})
+                db_cursor.execute(insert_query,
+                                  {'revid': revdata['revid'],
+                                   'title': revdata['title'].encode('utf-8'),
+                                   'username': revdata['user'].encode('utf-8'),
+                                   'timestamp': timestamp,
+                                   'length': length,
+                                   'delta': delta_length,
+                                   'identical': is_identical,
+                                   'revert': is_revert,
+                                   'minor': is_minor})
                 num_inserted_revisions += 1
             except MySQLdb.Error as e:
                 logging.error('failed to insert revision data')

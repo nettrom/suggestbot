@@ -200,10 +200,10 @@ class Recommender:
 	    # First we get major stakeholders in the article
             # (non-minor/non-reverting edits)
             self.dbcursor.execute(get_users_by_article_query,
-                             {'title': item})
+                             {'title': item.encode('utf-8')})
             for row in self.dbcursor:
                 # Only compute each thing once
-                user = row['rev_user']
+                user = row['rev_user'].decode('utf-8')
                 if user in coeditor_map:
                     continue
                 
@@ -221,11 +221,11 @@ class Recommender:
 	    # Users we've seen (so we don't re-run SQL queries all the time)...
             seen_minors = {}
             self.dbcursor.execute(get_minor_users_by_article_query,
-                             {'title' : item})
+                             {'title' : item.encode('utf-8')})
 
             # Note: using fetchall() to allow us to execute further queries
             for row in self.dbcursor.fetchall():
-                user = row['rev_user']
+                user = row['rev_user'].decode('utf-8')
                 
 	        # If user has already been seen, move along...
                 if user in coeditor_map:
@@ -248,7 +248,7 @@ class Recommender:
 
 	        # Is user above threshold?  If so, skip...
                 self.dbcursor.execute(self.get_editcount_query,
-                                      {'username': user})
+                                      {'username': user.encode('utf-8')})
                 nedit_row = self.dbcursor.fetchone()
                 self.dbcursor.fetchall() # flush cursor
                 if nedit_row['num_edits'] >= params['filter-threshold']:
@@ -286,9 +286,9 @@ class Recommender:
 
             # Find other items they've rated
             self.dbcursor.execute(self.get_articles_by_user_query,
-                                  {'username' : user})
+                                  {'username' : user.encode('utf-8')})
             for row in self.dbcursor:
-                new_item = row['rev_title']
+                new_item = row['rev_title'].decode('utf-8')
                 rec_map[new_item] = rec_map.get(new_item, 0) + \
                                     user_assoc[user]
                 coedit_count[new_item] = coedit_count.get(new_item, 0) + 1
@@ -304,9 +304,9 @@ class Recommender:
                 
         # Take out items from user
         self.dbcursor.execute(self.get_articles_by_user_query,
-                              {'username': user_for_query})
+                              {'username': user_for_query.encode('utf-8')})
         for row in self.dbcursor:
-            page_title = row['rev_title']
+            page_title = row['rev_title'].decode('utf-8')
             if page_title in rec_map:
                 del(rec_map[page_title])
 
@@ -348,7 +348,7 @@ class Recommender:
         # non-minor, non-reverting article edits for comparison.
         # Otherwise, we use all articles the user edited.
         self.dbcursor.execute(self.get_editcount_query,
-                              {'username': user})
+                              {'username': user.encode('utf-8')})
         row = self.dbcursor.fetchone()
         self.dbcursor.fetchall() # flush cursor
         user_editcount = row['num_edits']
@@ -361,9 +361,11 @@ class Recommender:
             # sys.stderr.write("User {} is not expert.\n".format(user))
             pass
             
-        self.dbcursor.execute(user_query, {'username': user})
+        self.dbcursor.execute(user_query,
+                              {'username': user.encode('utf-8')})
         for row in self.dbcursor:
-            user_edits_ref[row['rev_title']] = 1
+            page_title = row['rev_title'].decode('utf-8')
+            user_edits_ref[page_title] = 1
 
         for item in basket_ref:
             if item in user_edits_ref:

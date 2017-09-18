@@ -232,14 +232,14 @@ class CollabRecommender:
             # First we get major stakeholders in the article (non-minor/non-reverting edits)
             try:
                 self.dbcursor.execute(get_users_by_article_query,
-                               {'title': item})
+                               {'title': item.encode('utf-8')})
             except MySQLdb.Error as e:
                 logging.error("unable to execute query to get users by article")
                 logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
                 return(recs)
 
             for row in self.dbcursor:
-                user = row['rev_user']
+                user = row['rev_user'].decode('utf-8')
                 if user == username: # user can't be their own neighbour
                     continue
                 if  user in coeditor_map:
@@ -254,7 +254,7 @@ class CollabRecommender:
             seen_minors = {}
             try:
                 self.dbcursor.execute(get_minor_users_by_article_query,
-                               {'title': item})
+                               {'title': item.encode('utf-8')})
             except MySQLdb.Error as e:
                 logging.error("unable to execute query to get users by article")
                 logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
@@ -271,7 +271,7 @@ class CollabRecommender:
             for username in seen_minors.keys():
                 try:
                     self.dbcursor.execute(self.get_edit_count_query,
-                                   {'username': username})
+                                   {'username': username.encode('utf-8')})
                 except MySQLdb.Error as e:
                     logging.error("unable to execute query to get editcount for user")
                     logging.error("Error {0}: {1}".format(e.args[0], e.args[1]))
@@ -328,19 +328,19 @@ class CollabRecommender:
         # Otherwise, we use all articles the user edited.
         user_editcount = 0
         self.dbcursor.execute(self.get_edit_count_query,
-                              {'username': user})
+                              {'username': user.encode('utf-8')})
         for row in self.dbcursor:
             user_editcount = row['numedits']
 
         # Grab the users edits...
         if user_editcount >= self.xp_thresh:
             dbcursor.execute(self.get_articles_by_expert_user_query,
-                             {'username': user})
+                             {'username': user.encode('utf-8')})
         else:
             dbcursor.execute(self.get_articles_by_user_query,
-                             {'username': user})
+                             {'username': user.encode('utf-8')})
         for row in dbcursor:
-            user_edits.add(row['rev_title'])
+            user_edits.add(row['rev_title'].decode('utf-8'))
 
         # Calculate association using the Jaccard Coefficient
         shared = len(user_edits & basket)

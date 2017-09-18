@@ -159,10 +159,11 @@ class RecFilter:
 
         # Get the previous recommendations from the database and add them to the
         # full list of the user's edits, to prevent them from being recommended.
-        self.dbCursor.execute(getOldRecsQuery, {'lang': lang,
-                                                'username': user})
+        self.dbCursor.execute(getOldRecsQuery,
+                              {'lang': lang,
+                               'username': user.encode('utf-8')})
         for row in self.dbCursor.fetchall():
-            pageTitle = row['title']
+            pageTitle = row['title'].decode('utf-8')
             edits[pageTitle] = 1
 
         logging.debug("known list of edits now {0} items".format(len(edits)))
@@ -227,9 +228,9 @@ class RecFilter:
         for recTitle in recs.keys():
             recs[recTitle]['allcats'] = []
             self.dbCursor.execute(getArticleCatsQuery,
-                                  {'title': recTitle})
+                                  {'title': recTitle.encode('utf-8')})
             for row in self.dbCursor.fetchall():
-                recs[recTitle]['allcats'].append(row['category'])
+                recs[recTitle]['allcats'].append(row['category'].decode('utf-8'))
 
         # Now go fetch popularity and quality info for the recommended articles
         # (if the user is on en-WP, that is, for now...)
@@ -255,8 +256,9 @@ class RecFilter:
 
         if 'log' in params and params['log']:
             # Update logged recs by adding 1 to the age of everything
-            self.dbCursor.execute(updateOldRecsQuery, {'lang': lang,
-                                                       'username': user})
+            self.dbCursor.execute(updateOldRecsQuery,
+                                  {'lang': lang,
+                                   'username': user.encode('utf-8')})
 
             logging.debug("incremented age of user's previous recs...")
 
@@ -295,8 +297,8 @@ class RecFilter:
 
                 self.dbCursor.execute(logRecQuery,
                                       {'lang': lang,
-                                       'username': user,
-                                       'title': rec,
+                                       'username': user.encode('utf-8'),
+                                       'title': rec.encode('utf-8'),
                                        'rank': recs[rec]['rank'],
                                        'source': recs[rec]['source']})
 
@@ -305,7 +307,7 @@ class RecFilter:
             # Now delete anything that's too old, and commit changes to the database
             self.dbCursor.execute(deleteOldRecsQuery,
                                   {'lang': lang,
-                                   'username': user,
+                                   'username': user.encode('utf-8'),
                                    'age': config.rec_age_limit})
             self.dbConn.commit()
             if logFile:
@@ -369,11 +371,12 @@ class RecFilter:
         strippedCat = re.sub(r'\d*', '', cat) # remove numbers for multiply-listed categories
         maxItems = max(10000, 4*maxLength)
 
-        self.dbCursor.execute(randomRecQuery, {'category': strippedCat,
-                                               'sublimit': maxItems,
-                                               'limit': maxLength})
+        self.dbCursor.execute(randomRecQuery,
+                              {'category': strippedCat.encode('utf-8'),
+                               'sublimit': maxItems,
+                               'limit': maxLength})
         for row in self.dbCursor.fetchall():
-            recList.append(row['title'])
+            recList.append(row['title'].decode('utf-8'))
 
         logging.debug("got {num} hits for category {cat}".format(num=len(recList), cat=strippedCat))
 
@@ -478,8 +481,8 @@ class RecFilter:
         # logging.debug('testing if {0} is in category {1}'.format(rec, cat))
         strippedCat = re.sub(r'\d*', '', cat) # remove numbers for multiply-listed categories
         self.dbCursor.execute(self.catMembershipQuery,
-                              {'category': strippedCat,
-                               'title': rec})
+                              {'category': strippedCat.encode('utf-8'),
+                               'title': rec.encode('utf-8')})
         rows = self.dbCursor.fetchall()
         if rows:
             return(True)

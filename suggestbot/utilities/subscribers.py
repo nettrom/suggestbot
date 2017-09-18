@@ -286,9 +286,11 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
             num_retries += 1
             try:
                 # Store user info.
+                if self._page_title:
+                    self._page_title = self._page_title.encode('utf-8')
                 dbcursor.execute(insert_query,
                                  {'lang': self._lang,
-                                  'username': self._username,
+                                  'username': self._username.encode('utf-8'),
                                   'last_rec': self._last_rec,
                                   'page': self._page_title,
                                   'period': self._period,
@@ -354,7 +356,7 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
         try:
             dbcursor.execute(user_exists_query,
                              {'lang': self._lang,
-                              'username': self._username})
+                              'username': self._username.encode('utf-8')})
             if dbcursor.fetchone() is None:
                 # a new user, yay!
                 logging.info('user is new')
@@ -371,6 +373,8 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
             num_retries += 1
             try:
                 # Update userinfo.
+                if self._page_title:
+                    self._page_title = self._page_title.encode('utf-8')
                 dbcursor.execute(update_query,
                                  {'page': self._page_title,
                                   'period': self._period,
@@ -774,8 +778,10 @@ class Subscribers:
             # The values of the row we currently use:
             lastRec = row['last_rec']
             period = row['period']
-            username = row['username']
+            username = row['username'].decode('utf-8')
             pagetitle = row['page_title']
+            if pagetitle:
+                pagetitle = pagetitle.decode('utf-8')
             design = row['design']
 
             recTemplate = config.templates[self._lang]['regulars']
@@ -847,9 +853,10 @@ class Subscribers:
         # for each user on said list...
         for user in userQueue:
             # update database to processing
-            dbcursor.execute(setStatusQuery, {'status': 'processing',
-                                              'lang': self._lang,
-                                              'username': user['username']})
+            dbcursor.execute(setStatusQuery,
+                             {'status': 'processing',
+                              'lang': self._lang,
+                              'username': user['username'].encode('utf-8')})
             dbconn.commit()
 
             logging.info("now getting recs for User:{username}".format(
@@ -867,21 +874,24 @@ class Subscribers:
                                      replace=user['replace'])
             if success:
                 # update database to idle, and update last_rec
-                dbcursor.execute(setStatusQuery, {'status': 'idle',
-                                                  'lang': self._lang,
-                                                  'username': user['username']})
+                dbcursor.execute(setStatusQuery,
+                                 {'status': 'idle',
+                                  'lang': self._lang,
+                                  'username': user['username'].encode('utf-8')})
 
                 # we don't update the rec time on a test run...
                 if not config.testrun:
                     # Note: we call utcnow() to store the closest last recommendation
                     # time in the database.  If some slack is needed with regards to
                     # posting time, we can instead alter the scheduling.
-                    dbcursor.execute(setLastrecQuery, {'rectime': datetime.utcnow(),
-                                                       'lang': self._lang,
-                                                       'username': user['username']})
+                    dbcursor.execute(setLastrecQuery,
+                                     {'rectime': datetime.utcnow(),
+                                      'lang': self._lang,
+                                      'username': user['username'].encode('utf-8')})
                     # update count of number of recommendations for this user
-                    dbcursor.execute(incRecCountQuery, {'lang': self._lang,
-                                                        'user': user['username']})
+                    dbcursor.execute(incRecCountQuery,
+                                     {'lang': self._lang,
+                                      'user': user['username'].encode('utf-8')})
                     
                 dbconn.commit()
                 logging.info("Posted recs to User:{username}".format(

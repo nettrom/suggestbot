@@ -297,7 +297,7 @@ class RecommendationServer:
                 try:
                     self.dbcursor.executemany(
                         addseed_query,
-                        [(rec_params['request-id'], article)
+                        [(rec_params['request-id'], article.encode('utf-8'))
                          for article in user_articles])
                 except MySQLdb.Error as e:
                     logging.error('Failed to insert seeds into the database')

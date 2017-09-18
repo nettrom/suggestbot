@@ -162,7 +162,7 @@ class TaskUpdater:
         # reset all seen-values for articles in the task category
         with db.cursor(self.db_conn) as db_cursor:
             db_cursor.execute(reset_query,
-                              {'catname': task_name})
+                              {'catname': task_name.encode('utf-8')})
             logging.info("num rows w/updated seen-values: {}".format(
                 db_cursor.rowcount))
             self.db_conn.commit()
@@ -180,7 +180,7 @@ class TaskUpdater:
         # inserted with the 'seen' column unspecified, and it defaults to 1.
         with db.cursor(self.db_conn) as db_cursor:
             db_cursor.execute(delete_query,
-                              {'catname': task_name})
+                              {'catname': task_name.encode('utf-8')})
             logging.info("deleted {n} articles no longer in {catname}".format(
                 n=db_cursor.rowcount, catname=task_name))
             self.db_conn.commit()
@@ -218,8 +218,8 @@ class TaskUpdater:
 
         try:
             with db.cursor(self.db_conn) as db_cursor:
-                articles = [{'title': t,
-                             'catname': self.task_name}
+                articles = [{'title': t.encode('utf-8'),
+                             'catname': self.task_name.encode('utf-8')}
                             for t in self.art_queue]
                 
                 db_cursor.executemany(self.insert_query, articles)
