@@ -84,7 +84,7 @@ class InlinkTableUpdater:
         self.max_age = 7
 
         ## Database connection to the replicated Wikipedia database,
-        ## and the tool database with our inlink table.
+        ## and the tool database with our inlink count tables.
         self.wiki_db_conn = None
         self.tool_db_conn = None
 
