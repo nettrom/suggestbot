@@ -488,7 +488,7 @@ tasks = {
     'fr': {
         'STUB': {
             'categories': [],
-            'recurseCategories': {u"Catégorie d'ébauche": 5},
+            'recurseCategories': {"Catégorie d'ébauche": 5},
             'inclusion': stub_re[u"fr"],
             'exclusion': None,
             },
@@ -499,42 +499,42 @@ tasks = {
             'exclusion': None,
             },
         'ORPHAN': {
-            'categories': [u"Tous les articles orphelins"],
+            'categories': ["Tous les articles orphelins"],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
             },
         'WIKIFY': {
-            'categories': [u"Article à wikifier/Liste complète"],
+            'categories': ["Article à wikifier/Liste complète"],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
             },
         'SOURCE': {
             'categories': [
-                u"Article manquant de référence/Liste complète",
-                u"Article BPV manquant de référence",
-                u"Article pouvant contenir un travail inédit",
-                u"Tous les articles à prouver",
+                "Article manquant de référence/Liste complète",
+                "Article BPV manquant de référence",
+                "Article pouvant contenir un travail inédit",
+                "Tous les articles à prouver",
                 ],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
             },
         'UNENC': {
-            'categories': [u"Rédaction à améliorer"],
+            'categories': ["Rédaction à améliorer"],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None
             },
         'VERIFY': {
             'categories': [],
-            'recurseCategories': {u"Article à vérifier": 2},
+            'recurseCategories': {"Article à vérifier": 2},
             'inclusion': None,
             'exclusion': stub_re[u"fr"],
             },
         'PROMO': {
-            'categories': [u"Article au ton publicitaire"],
+            'categories': ["Article au ton publicitaire/Liste complète"],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
