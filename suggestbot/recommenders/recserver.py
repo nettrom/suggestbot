@@ -98,12 +98,15 @@ class RecommendationServer:
                 not_minor_edits.append(edit['title'])
 
             # Note: need to check for the presence of a comment in the dict,
-            # as it might've been deleted.
+            # as it might've been deleted. If there's no comment, mark the
+            # edit as a revert, so it's discarded (it's an unuseful edit).
             if 'comment' in edit and config.filter_unimportant:
                 if not edit['title'] in reverts:
                     reverts[edit['title']] = 'revert'
                 if not self.is_unimportant_by_comment(edit['comment'], lang):
                     reverts[edit['title']] = 'keep'
+            else:
+                reverts[edit['title']] = 'revert'
 
         # Replace all edits, items with non-minor ones if asked to filter
         # and if there were some not-minor edits
