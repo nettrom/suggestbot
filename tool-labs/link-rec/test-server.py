@@ -1,11 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8  -*-
 
-import json;
-import urllib2, urllib, httplib;
-import sys;
+import requests
+import json
+import sys
 
-url = "http://tools.wmflabs.org/suggestbot/link-recommender.py"
+url = "https://tools.wmflabs.org/suggestbot/link_recommender"
 
 items_json = {u'Association football': 1,
               u'The Seems': 1,
@@ -71,8 +71,8 @@ items_json = {u'Association football': 1,
 testLang = u'en'
 
 # Some Norwegian articles
-# items_json = {u"Henrik Ibsen":1, u"Oslo":1, u"Afrika":1};
-# testLang = u'no'
+items_json = {u"Henrik Ibsen":1, u"Oslo":1, u"Afrika":1};
+testLang = u'no'
 
 # Some Swedish articles
 # items_json = {u"Kingsburg, Kalifornien":1, u"Fidias":1,
@@ -111,33 +111,22 @@ params = {'lang': testLang,
           'nrecs': 2500};
 
 querydata = {'items': json.dumps(items_json),
-             'params': json.dumps(params)};
+             'params': json.dumps(params)}
 
-encoded_data = urllib.urlencode(querydata);
+print("Making request...")
+response = requests.post(url,
+                         data={'items': json.dumps(items_json),
+                               'params': json.dumps(params)},
+                         headers={'User-Agent': 'SuggestBot Test/.10',
+                                  'From': 'User:Nettrom'})
 
-try:
-    print "Making request...";
-    response = urllib2.urlopen(url, encoded_data);
-except httplib.HTTPException as e:
-    print 'HTTPException occurred', e;
-    sys.exit();
-
-print "Decoding data...";
-jsondata = u"";
-for line in response.readlines():
-    line = unicode(line, 'utf-8', errors='strict');
-    jsondata = u"{data}{newline}".format(data=jsondata, newline=line);
-
-# print "DEBUG: jsondata = ", jsondata;
-try:
-    decoded_data = json.loads(jsondata);
-except:
-    print "ERROR: failed to load JSON data:";
-    print jsondata;
-    exit;
-
-itemlist = decoded_data['success'];
-
-print "%d items returned" % (len(itemlist),);
-for pageData in itemlist[:10]:
-    print pageData['item'].encode('utf-8');
+if response.status_code != 200:
+    print('response status code is {}'.format(response.status_code))
+else:
+    resp_json = response.json()
+    if not 'success' in resp_json:
+        print('not a successful request')
+        print(resp_json)
+    else:
+        print('got {} recommendations back'.format(len(resp_json['success'])))
+        print(resp_json['success'][:10])
