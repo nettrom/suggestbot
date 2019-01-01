@@ -26,6 +26,8 @@ __version__ = "$Id$"
 import re
 import logging
 
+from operator import itemgetter
+
 from datetime import datetime, timedelta
 
 import pywikibot
@@ -216,8 +218,6 @@ class EditProfiler:
                     profile['interests'][title] = profile.get(title, 0) + \
                                                   max(0.025,
                                                       multiplier**diff.days)
-
-                logging.info('Profile now contains {} articles'.format(len(profile['interests'])))
                                  
                 if not last_title:
                     last_title = title
@@ -225,6 +225,8 @@ class EditProfiler:
                      and last_title != title:
                     done = True
 
+            logging.info('Profile now contains {} articles'.format(len(profile['interests'])))
+                    
         # Returns user profile
         return profile
 
@@ -307,8 +309,9 @@ def main():
 
     profile = profiler.make_profile(lang, user)
     print('Got interest profile with {n} items for user {username}'.format(n=len(profile['interests']),username=user))
-    print(profile['interests'])
-    print(profile['all_edits'])
+    print(sorted(profile['interests'].items(), reverse = True,
+                 key=itemgetter(1))[:25])
+    # print(profile['all_edits'])
     print("No. of items in profile: {}, no. of most recent edited articles: {}".format(len(profile['interests']), len(profile['all_edits'])))
     print("")
 
