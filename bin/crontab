@@ -1,69 +1,70 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=nettrom@gmail.com
 
 # For reference:
 # m h dom mon dow   command
 
-# Every day at 23:15, start updating list of regular users on Persian
+# Every day at 04:15, start updating list of regular users on Persian
 # Wikipedia, and post recommendations to those who are due
-15 23 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh fa
+15 04 * * * $HOME/src/suggestbot/bin/subscribers.sh fa
 
-# Every day at 23:45, start updating list of regular users on Russian
+# Every day at 04:45, start updating list of regular users on Russian
 # Wikipedia, and post recommendations to those who are due
-45 23 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh ru
+45 04 * * * $HOME/src/suggestbot/bin/subscribers.sh ru
 
-## Every day at 02:15, start updating list of regular users on French
+## Every day at 07:15, start updating list of regular users on French
 ## Wikipedia, and post recommendations to those who are due
-15 02 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh fr
+15 07 * * * $HOME/src/suggestbot/bin/subscribers.sh fr
 
-# Every day at 03:15, start updating list of regular users on Norwegian
+# Every day at 08:15, start updating list of regular users on Norwegian
 # Wikipedia, and post recommendations to those who are due
-15 03 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh no
+15 08 * * * $HOME/src/suggestbot/bin/subscribers.sh no
 
-# Every day at 04:15, start updating list of regular users on Portuguese
+# Every day at 09:15, start updating list of regular users on Portuguese
 # Wikipedia, and post recommendations to those who are due
-15 04 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh pt
+15 09 * * * $HOME/src/suggestbot/bin/subscribers.sh pt
 
-# Every day at 05:15, start updating list of regular users on Swedish
+# Every day at 10:15, start updating list of regular users on Swedish
 # Wikipedia, and post recommendations to those who are due
-15 04 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh sv
+15 10 * * * $HOME/src/suggestbot/bin/subscribers.sh sv
 
-# Every day at 06:15 and 18:15, start updating list of regular users on English
+# Every day at 11:15 and 23:15, start updating list of regular users on English
 # Wikipedia, and post recommendations to those who are due
-15 6,18 * * * /export/scratch/morten/suggestbot-github/bin/subscribers.sh en
+15 11,23 * * * $HOME/src/suggestbot/bin/subscribers.sh en
 
 # Every Monday at 01:01, start updating the category data for
 # English Wikipedia
-01 01 * * mon /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh en
+01 01 * * mon $HOME/src/suggestbot/bin/update-task-categories.sh en
 
 # Every Monday at 12:01, update category data for Portuguese Wikipedia
-01 12 * * mon /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh pt
+01 12 * * mon $HOME/src/suggestbot/bin/update-task-categories.sh pt
 
 # Every Sunday at 20:01, start doing the same for Norwegian Wikipedia
-01 20 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh no
+01 20 * * sun $HOME/src/suggestbot/bin/update-task-categories.sh no
 
 # Every Sunday at 19:01, start doing the same for Swedish Wikipedia
-01 19 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh sv
+01 19 * * sun $HOME/src/suggestbot/bin/update-task-categories.sh sv
 
 # Every Sunday at 18:01, start doing the same for Russian Wikipedia
-01 18 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh ru
+01 18 * * sun $HOME/src/suggestbot/bin/update-task-categories.sh ru
 
 # Every Sunday at 17:01, start doing the same for Persian Wikipedia
-01 17 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh fa
+01 17 * * sun $HOME/src/suggestbot/bin/update-task-categories.sh fa
 
 # Every Sunday at 16:01, start doing the same for French Wikipedia
-01 16 * * sun /export/scratch/morten/suggestbot-github/bin/update-task-categories.sh fr
+01 16 * * sun $HOME/src/suggestbot/bin/update-task-categories.sh fr
 
 # Every few hours, update the revision tables of English, Russian, Swedish,
 # French, and Portuguese.  Once a day, shortly after midnight, update
 # the revision tables of Norwegian, Persian, and Hungarian
-51 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh en > /dev/null 2&>1
-41 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh pt > /dev/null 2&>1
-21 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh ru > /dev/null 2&>1
-11 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh sv > /dev/null 2&>1
-01 */3 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh fr > /dev/null 2&>1
-5 0 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh no > /dev/null 2&>1
-10 0 * * * /export/scratch/morten/suggestbot-github/bin/update-revisions.sh fa > /dev/null 2&>1
+51 */3 * * * $HOME/src/suggestbot/bin/update-revisions.sh en > /dev/null 2&>1
+41 */3 * * * $HOME/src/suggestbot/bin/update-revisions.sh pt > /dev/null 2&>1
+21 */3 * * * $HOME/src/suggestbot/bin/update-revisions.sh ru > /dev/null 2&>1
+11 */3 * * * $HOME/src/suggestbot/bin/update-revisions.sh sv > /dev/null 2&>1
+01 */3 * * * $HOME/src/suggestbot/bin/update-revisions.sh fr > /dev/null 2&>1
+5 0 * * * $HOME/src/suggestbot/bin/update-revisions.sh no > /dev/null 2&>1
+10 0 * * * $HOME/src/suggestbot/bin/update-revisions.sh fa > /dev/null 2&>1
 
 ## Every day at midnight and noon, update the statistics table with counts of number of users
-1 0,12 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/generate-stats.sh > /dev/null 2&>1
+## 1 0,12 * * * /export/scratch/morten/suggestbot/sb-enwiki/launchers/generate-stats.sh > /dev/null 2&>1
