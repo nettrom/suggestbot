@@ -175,10 +175,10 @@ class OpenTaskUpdater:
         :type category_name: str
         """
 
-        logging.info("finding all pages in category {}".format(
+        logging.info("finding all Main namespace pages in category {}".format(
             category_name))
 
-        found_pages = list()
+        found_pages = set()
         attempts = 0
         while attempts <  self.config['max_query_attempts']:
             try:
@@ -187,10 +187,10 @@ class OpenTaskUpdater:
                         self.all_pages_query,
                         {'cat_name': category_name.replace(
                             ' ', '_').encode('utf-8'),
-                         'ns': 0})
+                         'ns': 0}) # ns 0 is Main (articles)
 
                     for (page_id, page_title) in db_cursor:
-                        found_pages.append(
+                        found_pages.add(
                             page_title.decode('utf-8').replace('_', ' '))
 
             except pymysql.Error as e:
@@ -206,6 +206,36 @@ class OpenTaskUpdater:
         if attempts >= self.config['max_query_attempts']:
             logging.error("exhausted number of query attempts")
 
+        logging.info("finding all Talk namespace pages in category {}".format(
+            category_name))
+
+        attempts = 0
+        while attempts <  self.config['max_query_attempts']:
+            try:
+                with self.db_conn.cursor() as db_cursor:
+                    db_cursor.execute(
+                        self.all_pages_query,
+                        {'cat_name': category_name.replace(
+                            ' ', '_').encode('utf-8'),
+                         'ns': 1}) # ns 1 is (article) Talk
+
+                    for (page_id, page_title) in db_cursor:
+                        found_pages.add(
+                            page_title.decode('utf-8').replace('_', ' '))
+
+            except pymysql.Error as e:
+                attempts += 1
+                logging.error("query error {}: {}".format(e.args[0], e.args[1]))
+                if e.errno == pymysql.errnos['CR_SERVER_GONE_ERROR'] \
+                        or e.errno == pymysql.errnos['CR_SERVER_LOST']:
+                    # lost connection, reconnect
+                    self.db_connect()
+            else:
+                break # break out of query attempt loop
+            
+        if attempts >= self.config['max_query_attempts']:
+            logging.error("exhausted number of query attempts")
+            
         logging.info("found {} pages in this category".format(
             len(found_pages)))
 
