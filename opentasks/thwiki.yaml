@@ -1,0 +1,56 @@
+---
+# Language code for this wiki (e.g. "pl" is Polish)
+lang_code: th
+
+# Database host and database names
+db_host: thwiki
+db_name: thwiki_p
+
+# Title of the Opentask page
+opentask_page: "วิกิพีเดีย:ศาลาประชาคม/Opentask"
+
+# Comment used when making the edit
+edit_comment: "Updating list of open tasks..."
+
+# Number of pages listed per category
+pages_per_category: 5
+
+# Maximum number of query attempts we'll make before exiting with an error
+max_query_attempts: 3 
+
+# In a test run, the resulting wikitext is printed to stdout, no edits are made
+test_run: false
+
+# Task definitions.
+# These are key-value pairs, where the key is the ID of the span element on
+# the opentask page, into which the list of articles is put.
+#
+# The values are one of:
+# 1: A string, the name of a category to randomly pick articles from
+# 2: A list of strings, names of categories to randomly pick articles from.
+# 3: A list where the first element is "use-subs". The second element in
+#    the list is a category, and we'll randomly pick articles from that
+#    category's sub-categories.
+# 4: A list where the first element is "use-subsubs". The second element in
+#    the list is a category, and we'll randomly pick articles from that
+#    category's sub-sub-categories.
+#
+# For items 2, 3, and 4 above, articles in the categories are combined into
+# a set before articles are randomly picked.
+#
+# If the key is "stub", then the code follows item 3 above, but sub-categories
+# are picked at random until we have enough articles. This is done to support
+# the English Wikipedia's large number of stubs (and stub categories).
+
+tasks:
+  cleanup: "หน้าที่ต้องการความช่วยเหลือ"
+  sources: "บทความที่ขาดแหล่งอ้างอิง"
+  incomplete:
+    - "use-subs"
+    - "บทความที่ยังไม่สมบูรณ์"
+  adjust: "บทความวิกิพีเดียทั้งหมดที่ต้องการปรับ"
+  language: "ตรวจภาษา"
+  importance: "บทความที่ไม่ได้อธิบายความสำคัญ"
+  linkfix: "บทความที่มีลิงก์เสีย"
+  formatting: "ตรวจแก้รูปแบบ"
+  uncategorized: "หน้าที่ยังไม่ได้จัดหมวดหมู่"

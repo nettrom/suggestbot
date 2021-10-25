@@ -8,22 +8,31 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 # Jobs updating inlink count tables
 # Run every morning for enwiki, nowiki, svwiki, ptwiki, fawiki, huwiki,
-# and ruwiki
-14 1 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh no 2>$HOME/crontab-errors.txt >/dev/null
-14 2 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh sv 2>$HOME/crontab-errors.txt >/dev/null
-14 3 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh pt 2>$HOME/crontab-errors.txt >/dev/null
-14 4 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh fa 2>$HOME/crontab-errors.txt >/dev/null
-14 5 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh en 2>$HOME/crontab-errors.txt >/dev/null
-14 6 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh ru 2>$HOME/crontab-errors.txt >/dev/null
-14 7 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh fr 2>$HOME/crontab-errors.txt >/dev/null
+# and ruwiki:
+## Commented out at the moment due to Tools DB being overloaded and
+## replaced, ref for example: T193264
+#14 1 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh no 2>$HOME/crontab-errors.txt >/dev/null
+#14 3 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh sv 2>$HOME/crontab-errors.txt >/dev/null
+#14 5 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh pt 2>$HOME/crontab-errors.txt >/dev/null
+#14 7 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh fa 2>$HOME/crontab-errors.txt >/dev/null
+#14 9 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh ru 2>$HOME/crontab-errors.txt >/dev/null
+#14 11 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh fr 2>$HOME/crontab-errors.txt >/dev/null
+## Moved enwiki to the end, as that might be a job that takes longer
+#14 7 * * * qsub -q task $HOME/link-rec/update_linkcounts.sh en 2>$HOME/crontab-errors.txt >/dev/null
 
-# Job(s) updating en:Wikipedia:Community portal/Opentask
-15,45 * * * * qsub -q task $HOME/projects/opentask/opentask.sh 2>$HOME/crontab-errors.txt >/dev/null
+# Job(s) updating lists of open tasks:
 
-# Job(s) updating lists of open tasks on other Wikis
-31 * * * * qsub -q task $HOME/projects/opentask/launch-lang.sh pl "Wikipedia:Sprzątanie Wikipedii/Sugerowane listy" $HOME/projects/opentask/plwiki-taskdef.json 2>$HOME/crontab-errors.txt >/dev/null
-25 * * * * qsub -q task $HOME/projects/opentask/launch-lang.sh ru "Википедия:Сообщество/Задачи" $HOME/projects/opentask/ruwiki-taskdef.json 2>$HOME/crontab-errors.txt >/dev/null
-5 2 2-30/2 * * qsub -q task $HOME/projects/opentask/launch-lang.sh th "วิกิพีเดีย:ศาลาประชาคม/Opentask" $HOME/projects/opentask/thwiki-taskdef.json
+## English Wikipedia:
+15,45 * * * * qsub -q task $HOME/projects/opentask/opentask.sh $HOME/projects/opentask/enwiki.yaml 2>$HOME/crontab-errors.txt >/dev/null
 
+## Polish Wikipedia:
+31 * * * * qsub -q task $HOME/projects/opentask/opentask.sh $HOME/projects/opentask/plwiki.yaml 2>$HOME/crontab-errors.txt >/dev/null
+
+## Russian Wikipedia:
+25 * * * * qsub -q task $HOME/projects/opentask/opentask.sh $HOME/projects/opentask/ruwiki.yaml 2>$HOME/crontab-errors.txt >/dev/null
+
+## Thai Wikipedia:
+5 2 2-30/2 * * qsub -q task $HOME/projects/opentask/opentask.sh $HOME/projects/opentask/thwiki.yaml 2>$HOME/crontab-errors.txt >/dev/null
+      
 # Job(s) publishing inlink counts for Wikis
 # 35 7 * * 7 qsub -q task $HOME/projects/inlink-counts/publish-inlink-counts.sh en 2>$HOME/crontab-errors.txt >/dev/null

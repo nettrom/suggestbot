@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Program to update a list of open tasks for a Wikipedia.
-Copyright (C) 2012-2016 SuggestBot dev group
+Copyright (C) 2012-2020 SuggestBot dev group
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -21,810 +21,581 @@ Boston, MA  02110-1301, USA.
 """
 
 import os
-import sys
 import re
+import yaml
 import random
 import logging
-import oursql
 
-from datetime import datetime
+from collections import defaultdict
+
+import pymysql
 
 import pywikibot
 
 class OpenTaskUpdater:
-	def __init__(self, lang=None, mysqlConf=None,
-		     taskPage=None, taskDef=None, pagesPerCategory=5,
-		     editComment=None, testRun=False, maxDBQueryAttempts=3):
-		"""
-		Instantiate an object intended to update the list of open tasks.
-		
-		@param lang: Language code of the Wikipedia we're working on.
-		@type lang: str
-
-		@param mysqlConf: Path to MySQL's configuration file
-                                  used for authentication
-		@type mysqlConf: str
-
-		@param taskPage: Title of the page containing open tasks
-		@type taskPage: unicode
-
-		@param taskDef: Dictionary mapping task IDs
-                                to categories containing tasks
-		@type taskDef: dict
-
-		@param pagesPerCategory: No. of desired pages per task category
-		@type pagesPerCategory: int
-		
-		@param editComment: Edit comment used on successful update
-		@type editComment: unicode
-
-		@param testRun: Do a test run? Prints the resulting wikitext
-                                to stdout instead of saving the page.
-		@type testRun: bool
-
-		@param maxDBQueryAttempts: max number of database query
-                                           attempts before aborting.
-		@type maxDBQueryAttempts: int
-		"""
-		
-		self.lang = 'en'
-		if lang:
-			self.lang = lang
-
-		self.mysqlConf = "~/replica.my.cnf"
-		if mysqlConf:
-			self.mysqlConf = mysqlConf
-
-		self.numPages = pagesPerCategory
-
-		self.editComment = u"Updating list of open tasks..."
-		if editComment:
-			self.editComment = editComment
-
-		self.taskPage = u"Wikipedia:Community portal/Opentask"
-		if taskPage:
-			self.taskPage = taskPage
-
-                if not isinstance(self.taskPage, unicode):
-                        self.taskPage = unicode(self.taskPage, 'utf-8',
-                                                errors='strict')
-
-		if taskDef:
-			self.taskDef = taskDef
-		else:
-			# Wikify is deleted, the following templates and
-			# associated categories take over for it:
-			# {{dead end}}, {{underlinked}}, and {{overlinked}}
-
-			# "leadcleanup" refers to
-			# "Category:Wikipedia introduction cleanup"
-			# where amongst others, {{inadequate lead}},
-			# {{lead too short}}, and {{lead too long}} end up
-
-			# Task def is a dictionary where keys are IDs of
-			# the span elements to which the list of pages will go.
-			# Values are one of:
-			# 1: unicode string, name of category to grab pages from
-			# 2: list of unicode strings, names of categories,
-			#    pages will be grabbed randomly from
-			#    all categories combined
-			#
-			# The name of a category can also be a tuple of the form
-			# ("use-subs", u"[category name]") which will indicate
-			# that we need to grab all sub-categories from
-			# the given category. Pages will then be grabbed
-			# randomly from all the sub-categories.
-
-			self.taskDef = {
-				"wikify": [u"All dead-end pages",
-					   u"All articles with too few wikilinks",
-					   u"All articles with too many wikilinks"],
-				"leadcleanup": ("use-subs", "Wikipedia introduction cleanup"),
-
-				"copyedit": u"All articles needing copy edit",
-				"update": u"All Wikipedia articles in need of updating",
-				"translate": u"Wikipedia articles needing cleanup after translation",
-				"verify": u"All pages needing factual verification",
-				"or" : u"All articles that may contain original research",
-				"stub" : u"Stub categories",
-				# "merge": u"All articles to be merged",
-				# "split": u"All articles to be split",
-				# "expand" : u"All articles to be expanded",
-				# "npov": u"All NPOV disputes",
-				# "cleanup": u"All pages needing cleanup",
-				# "style" : u"All articles needing style editing",
-				# "orphan": u"All orphaned articles",
-				# "afdrelist" : {
-				#	"catname": u"Relisted AfD debates",
-				#	"pattern": u"Articles_for_deletion/%", # filter
-				#	"exclude": u"%/Log/%", # remove these
-				#	"namespace": 4, # namespace of pages we're looking for
-				#	"prefix": u"Wikipedia:", # namespace prefix
-				#	},
-				}
-
-		self.testRun = testRun
-
-		self.dbConn = None
-		self.dbCursor = None
-		self.maxDBQueryAttempts = maxDBQueryAttempts
-		
-		# Dictionary of results, a list of pages for each task
-		self.foundTasks = dict((taskId, []) for taskId in self.taskDef.keys())
-
-		# Query to fetch a number of random pages from a given category.
-		self.randomPageQuery = r"""SELECT /* LIMIT:120 */
-                                           page_id, page_title
-                                           FROM page JOIN categorylinks
-                                           ON page_id=cl_from
-                                           WHERE cl_to=?
-                                           AND page_namespace=?
-                                           AND page_random >= RAND()
-                                           ORDER BY page_random LIMIT ?"""
-
-		# Query to fetch all pages in a given namespace
-		# from a given category
-		self.getAllPagesQuery = u"""SELECT page_id, page_title
-                                            FROM page JOIN categorylinks
-                                            ON page_id=cl_from
-                                            WHERE cl_to=?
-                                            AND page_namespace=?"""
-
-	def connectDatabase(self, hostName=None, dbName=None):
-		'''
-		Connect to the database associated with our Wikipedia,
-		or a given server and database if host/database names
-		are supplied.
-
-		@param hostName: hostname of the server we're connecting to
-		@type hostName: str
-
-		@param dbName: name of the database we will be using
-		@type dbName: str
-		'''
-		if not hostName:
-			hostName = u"{lang}wiki.labsdb".format(lang=self.lang)
-			dbName = u"{lang}wiki_p".format(lang=self.lang)
-
-		if self.dbConn:
-			self.disconnectDatabase()
-
-		try:
-			self.dbConn = oursql.connect(db=dbName,
-						     host=hostName,
-						     read_default_file=os.path.expanduser(self.mysqlConf),
-						     use_unicode=False,
-						     charset=None)
-			self.dbCursor = self.dbConn.cursor()
-		except oursql.Error, e:
-			logging.error("unable to connect to database {0} on server {1}".format(dbName, hostname))
-			logging.error("oursqul error {0}: {1}".format(e.args[0], e.args[1]))
-			return False
-		
-		# Ok, done
-		return True
-
-	def disconnectDatabase(self):
-		if not self.dbConn or not self.dbCursor:
-			logging.warning(u"can't disconnect connections that are None")
-			return False
-		try:
-			self.dbCursor.close()
-			self.dbConn.close()
-		except oursql.Error, e:
-			logging.error("unable to disconnect from database")
-			logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-			return False
-		# Ok, done
-		return True
-
-	def stopme(self):
-		pywikibot.stopme()
-
-	def findAfDs(self, afdDef=None, nPages=5):
-		"""
-		Find relisted Articles for Deletion (AfDs).
-		Excepts a working database connection to exist as self.dbConn
-
-		@param afdDef: Dictionary defining how to find the relisted AfDs
-		               keys and their mapping:
-                               catname: category where they are listed
-                               pattern: SQL "LIKE" pattern for inclusion
-                               exclude: SQL "LIKE" pattern of exclusion
-                               namespace: ns of the pages we're looking for
-                               prefix: namespace prefix
-		@type afdDef: dict
-
-		@param nPages: number of pages to find
-		@type nPages: int
-		"""
-		if not afdDef:
-			logging.error(u"cannot find relisted AfDs without the definition of how to find them")
-			return []
-
-		# Query to get pages from the relisted AfD category,
-		# matching a given pattern, enabling exclusion based
-		# on certain titles (e.g. log-pages) and limiting
-		# to a given namespace
-		afdPageQuery = r"""SELECT /* LIMIT:120 */
-                                   page_id, page_title
-                                   FROM page JOIN categorylinks
-                                   ON page_id=cl_from
-                                   WHERE cl_to=?
-                                   AND page_title LIKE ?
-                                   AND page_title NOT LIKE ?
-                                   AND page_namespace=?
-                                   AND page_random >= RAND()
-                                   ORDER BY page_random
-                                   LIMIT ?"""
-
-		logging.info("trying to find {n} relisted articles for deletion...".format(n=nPages))
-
-		foundPages = []
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(afdPageQuery,
-						 (re.sub(" ", "_",
-							 afdDef['catname']),
-						  afdDef['pattern'],
-						  afdDef['exclude'],
-						  afdDef['namespace'],
-						  nPages));
-				for (pageId, pageTitle) in dbCursor:
-					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
-								  'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1
-				logging.error("unable to execute query to get relisted AfDs, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error("exhausted number of query attempts, aborting")
-			return foundPages
-
-		logging.info(u"found {n} relisted AfDs".format(n=len(foundPages)))
-
-		# OK, done
-		return foundPages
-
-	def findStubs(self, category=None, nPages=5):
-		"""
-		Use the database to pick a random stub category,
-		then pick a sufficient number of pages from that category.
-		Expects a working database connection to exist as self.dbConn
-
-		@param category: The overarching stub category to find a random
-                                 category from.
-		@type category: unicode
-
-		@param nPages: number of pages to find
-		@type nPages: int
-		"""
-		if not category:
-			logging.error(u"unable to find stubs without a seed category")
-			return []
-
-		logging.info("trying to find {n} stub tasks...".format(n=nPages))
-
-		foundPages = []
-		
-		dbCursor = self.dbConn.cursor()
-		exitLoop = False
-		while len(foundPages) < nPages and not exitLoop:
-			randStubCategory = None
-			attempts = 0
-			while attempts < self.maxDBQueryAttempts:
-				try:
-					# pick one random stub category (ns = 14)
-					dbCursor.execute(self.randomPageQuery,
-							 (re.sub(" ", "_", category).encode('utf-8'),
-							  14, 1))
-					for (pageId, pageTitle) in dbCursor:
-						randStubCategory = unicode(pageTitle, 'utf-8', errors='strict')
-				except oursql.Error, e:
-					attempts += 1
-					logging.error("unable to execute query to get a random stub category, possibly retrying");
-					logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-					if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-						    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-						# lost connection, reconnect
-						self.connectDatabase()
-				else: 
-					break
-
-			if not randStubCategory:
-				# something went wrong
-				logging.error("unable to find random stub category, aborting");
-				exitLoop = True
-				continue
-
-			foundPages.extend(self.findPages(category=randStubCategory,
-							 nPages=nPages))
-
-		# truncate to self.numPages
-		if len(foundPages) > nPages:
-			foundPages = foundPages[:nPages]
-
-		logging.info("found {n} stub tasks".format(n=len(foundPages)))
-
-		return foundPages
-
-	def findAllPages(self, category=None):
-		"""
-		Use the database to fetch all Main & Talk namespace pages from
-		a given category.  Expects a working database connection
-		to exist as self.dbConn
-
-		@param category: Name of the category to grab pages from
-		@type category: unicode
-		"""
-
-		if not category:
-			logging.error(u"unable to find pages from a given category without a category name")
-			return None
-
-		logging.info(u"finding all pages in category {cat}".format(cat=category).encode('utf-8'))
-
-                foundPages = []
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(self.getAllPagesQuery,
-						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  0) # Main ns
-						 )
-				for (pageId, pageTitle) in dbCursor:
-					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
-								  'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1
-				logging.error("unable to execute query to get pages from this category, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error(u"exhausted number of query attempts")
-
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(self.getAllPagesQuery,
-						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  1) # Talk ns
-						 )
-				for (pageId, pageTitle) in dbCursor:
-					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
-								  'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1
-				logging.error("unable to execute query to get pages from this category, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error(u"exhausted number of query attempts")
-
-
-		logging.info(u"found {n} pages in this category".format(n=len(foundPages)))
-		return foundPages
-
-	def findSubcategoryPages(self, category=None):
-		"""
-		Use the database to retrieve all direct descendant
-		sub-categories of the given category.  Then find all pages
-		in all the sub-categories and return the union of all of them.
-
-		@param category: Name of the category from which we'll
-		                 grab sub-categories.
-		@type category: unicode
-		"""
-
-		if not category:
-			logging.error(u"unable to find sub-categories in a given category without a category name")
-			return None
-
-		logging.info(u"finding all pages from direct descendants of category {cat}".format(cat=category).encode('utf-8'))
-
-		subCategories = []
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(self.getAllPagesQuery,
-						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  14) # ns (14=Category)
-						 )
-				for (pageId, pageTitle) in dbCursor:
-					subCategories.append(unicode(re.sub('_', ' ', pageTitle),
-								     'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1;
-				logging.error("unable to execute query to get sub-categories from this category, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error(u"exhausted number of query attempts")
-			return []
-
-		logging.info(u"found {n} sub-categories in this category".format(n=len(subCategories)))
-		
-		foundPages = set()
-		for categoryName in subCategories:
-			subCatPages = self.findAllPages(category=categoryName)
-			if subCatPages:
-				foundPages = foundPages.union(subCatPages)
-
-		return foundPages
-
-	def findSubSubcategoryPages(self, category=None):
-		"""
-		Use the database to retrieve all first descendant
-		sub-categories of the given category.  Then find all pages
-		in direct subcategories of these categories.
-
-		@param category: Name of the category from which we'll
-		                 grab sub-subcategories.
-		@type category: unicode
-		"""
-
-		if not category:
-			logging.error(u"unable to find sub-categories in a given category without a category name")
-			return None
-
-		logging.info(u"finding all pages from second descendants of category {cat}".format(cat=category).encode('utf-8'))
-
-		subCategories = []
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(self.getAllPagesQuery,
-						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  14) # ns (14=Category)
-						 )
-				for (pageId, pageTitle) in dbCursor:
-					subCategories.append(unicode(re.sub('_', ' ', pageTitle),
-								     'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1;
-				logging.error("unable to execute query to get sub-categories from this category, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error(u"exhausted number of query attempts")
-			return []
-
-		logging.info(u"found {n} sub-categories in this category".format(n=len(subCategories)))
-		
-		foundPages = set()
-		for categoryName in subCategories:
-			subCatPages = self.findSubcategoryPages(category=categoryName)
-			if subCatPages:
-				foundPages = foundPages.union(subCatPages)
-
-		return foundPages
-
-
-	def findRandomPages(self, category=None, nPages=5):
-		"""
-		Use the database to pick a number of pages from
-		a given category. Expects a working database connection
-		to exist as self.dbConn
-
-		@param category: Name of the category to grab pages from
-		@type category: unicode
-
-		@param nPages: number of pages to fetch
-		@type nPages: int
-		"""
-
-		if not category:
-			logging.error(u"unable to find pages without a category to pick from")
-			return []
-
-		logging.info(u"finding {n} tasks from category {cat}".format(n=nPages, cat=category).encode('utf-8'))
-
-		foundPages = []
-		attempts = 0
-		while attempts < self.maxDBQueryAttempts:
-			try:
-				dbCursor = self.dbConn.cursor()
-				dbCursor.execute(self.randomPageQuery,
-						 (re.sub(' ', '_', category).encode('utf-8'), # catname
-						  0, # ns
-						  nPages) # n pages
-						 )
-				for (pageId, pageTitle) in dbCursor:
-					foundPages.append(unicode(re.sub('_', ' ', pageTitle),
-								  'utf-8', errors='strict'))
-			except oursql.Error, e:
-				attempts += 1;
-				logging.error("unable to execute query to get pages from this category, possibly retrying")
-				logging.error("oursql error {0}: {1}".format(e.args[0], e.args[1]))
-				if e.errno == oursql.errnos['CR_SERVER_GONE_ERROR'] \
-					    or e.errno == oursql.errnos['CR_SERVER_LOST']:
-					# lost connection, reconnect
-					self.connectDatabase()
-			else:
-				break
-		if attempts >= self.maxDBQueryAttempts:
-			logging.error(u"exhausted number of query attempts")
-
-		logging.info(u"found {n} tasks from this category".format(n=len(foundPages)).encode('utf-8'))
-
-		return foundPages
-
-
-	def findPages(self, category=None, nPages=5):
-		"""
-		Pick a number of pages from a given category definition through
-		sub-methods that access the database.
-
-		@param category: Category-definition of where to grab pages from
-		@type category: unicode
-
-		@param nPages: number of pages to fetch
-		@type nPages: int
-		"""
-
-		if not category:
-			logging.error(u"unable to find pages without a category defition to pick from")
-			return []
-
-		if isinstance(category, unicode):
-			return self.findRandomPages(category=category,
-						    nPages=nPages)
-		else:
-			# Create a set of all pages we find,
-			# from which we'll randomly sample.
-			foundPages = set()
-			if isinstance(category, list) \
-                           and category[0] == 'use-subs':
-                                foundPages = self.findSubcategoryPages(category=category[1])
-                        elif isinstance(category, list) \
-                             and category[0] == 'use-subsubs':
-                                foundPages = self.findSubSubcategoryPages(category=category[1])
-                        elif isinstance(category, list):
-                                for catName in category:
-					if isinstance(catName, unicode):
-						foundPages = foundPages.union(self.findAllPages(category=catName))
-					elif isinstance(catName, tuple):
-						# Category name is the second element
-						foundPages = foundPages.union(self.findSubcategoryPages(category=catName[1]))
-			elif isinstance(category, tuple):
-				# Category name is the second element
-				foundPages = self.findSubcategoryPages(category=category[1])
-				
-		try:
-			# OK, return a random sample of size nPages:
-			return random.sample(foundPages, nPages)
-		except ValueError:
-			# Might happen if we have too few pages to sample,
-			# return the whole set.
-			return foundPages;
-
-	def update(self):
-		"""
-		Update the list of open tasks.
-		"""
-
-		# connect to the wiki and log in
-		logging.info("connecting to {lang}wiki".format(lang=self.lang))
-
-		wikiSite = pywikibot.getSite(self.lang)
-		wikiSite.login()
-
-		# Did we log in?
-		if wikiSite.username() is None:
-			logging.error("failed to log in correctly, aborting")
-			return False
-
-		# connect to the database
-		logging.info("connecting to database")
-
-		if not self.connectDatabase():
-			logging.error("failed to connect to database, aborting")
-			return False
-
-		# Lets deal with stubs first, where we'll pick random stub
-		# categories until we have enough
-		# (self.numPages) pages from those
-                if 'stub' in self.foundTasks:
-                        logging.info("finding stub tasks...")
-                        self.foundTasks['stub'] = self.findStubs(category=self.taskDef['stub'],
-                                                                 nPages=self.numPages)
-                        logging.info("done finding stub tasks");
-
-		# Handle relisted AfDs, they use a slightly different query
-		if "afdrelist" in self.taskDef:
-			logging.info("fetching relisted articles for deletion...");
-			self.foundTasks['afdrelist'] = self.findAfDs(afdDef=self.taskDef['afdrelist'],
-								     nPages=self.numPages)
-			logging.info(u"done fetching relisted AfDs")
-
-		# Now, for all the other categories...
-		for (taskId, taskCategory) in self.taskDef.iteritems():
-			if taskId == 'stub' \
-				    or taskId == 'afdrelist':
-				# already done...
-				continue
-
-			logging.info(u"finding tasks for id {id} from category {cat}".format(id=taskId, cat=taskCategory).encode('utf-8'))
-
-			self.foundTasks[taskId] = self.findPages(category=taskCategory,
-								 nPages=self.numPages)
-			logging.info("find complete, found {n} pages in this category".format(n=len(self.foundTasks[taskId])))
-
-		# Go through the found tasks and turn the list of page titles
-		# into a unicode string, we write an unordered list (*)
-		# where each list item is a link to a given page
-		for (taskId, pageList) in self.foundTasks.iteritems():
-			if not pageList:
-				self.foundTasks[taskId] = u"None"
-			else:
-				if taskId == "afdrelist":
-					# Switch SQL LIKE-pattern into a regex
-					# we can use to strip that from
-					# the page title
-					stripPattern = u""
-					pattern = self.taskDef['afdrelist']['pattern']
-					if pattern: # more than ""?
-						stripPattern = re.sub('%', "", pattern)
-						stripPattern = re.sub("_", " ", stripPattern)
-					# Build all the links manually
-					self.foundTasks[taskId] = u"\n".join([u"* [[{prefix}{fulltitle}|{linktitle}]]".format(prefix=self.taskDef['afdrelist']['prefix'], fulltitle=page, linktitle=re.sub(stripPattern, u"", page)) for page in pageList])
-
-				else:
-					self.foundTasks[taskId] = u"\n".join([u"* {title}".format(title=pywikibot.Page(wikiSite, page).title(asLink=True, insite=wikiSite)) for page in pageList])
-
-		logging.info(u"turned page titles into page links, getting wikitext of page {taskpage}".format(taskpage=self.taskPage).encode('utf-8'))
-
-		tasktext = None;
-		try:
-			taskpage = pywikibot.Page(wikiSite, self.taskPage)
-			tasktext = taskpage.get()
-		except pywikibot.exceptions.NoPage:
-			logging.warning(u"task page {title} does not exist, aborting".format(title=self.taskPage).encode('utf-8'))
-		except pywikibot.exceptions.IsRedirectPage:
-			logging.warning(u"task page {title} is a redirect, aborting".format(title=self.taskPage).encode('utf-8'))
-		except pywikibot.data.api.TimeoutError:
-			logging.error(u"API request to {lang}-WP timed out, unable to get wikitext of {title}, cannot continue".format(lang=self.lang, title=self.taskPage))
-
-		if tasktext is None:
-			return False
-
-		logging.info(u"got wikitext, substituting page lists...");
-
-		for (taskId, pageList) in self.foundTasks.iteritems():
-			# note: using re.DOTALL because we need .*? to match \n
-			#       since our content is a list
-			tasktext = re.sub(ur'<div\s+id="{taskid}"\s*>(.*?)</div>'.format(taskid=taskId),
-					  ur'<div id="{taskid}">\n{pagelist}</div>'.format(taskid=taskId, pagelist=pageList),
-					  tasktext, flags=re.DOTALL)
-
-		if self.testRun:
-			logging.info(u"running a test, printing out new wikitext:\n")
-			print(tasktext.encode('utf-8'))
-		else:
-			logging.info(u"saving page with new text")
-			taskpage.text = tasktext
-			try:
-				taskpage.save(comment=self.editComment)
-			except pywikibot.exceptions.EditConflict:
-				logging.error(u"saving page {title} failed, edit conflict".format(title=self.taskPage).encode('utf-8'))
-				return False;
-			except pywikibot.exceptions.PageNotSaved as e:
-				logging.error(u"saving page {title} failed")
-				logging.error(u"pywikibot error: {etext}".format(title=self.taskPage, etext=e).encode('utf-8'))
-				return False
-			except pywikibot.data.api.TimeoutError:
-				logging.error(u"saving page {title} failed, API request timeout fatal".format(title=self.taskPage).encode('utf-8'))
-				return False
-
-		logging.info("list of open tasks successfully updated")
-
-		if not self.disconnectDatabase():
-			logging.warning(u"unable to cleanly disconnect from the database")
-
-		return True
+    def __init__(self, config_file):
+        """
+        Instantiate the Opentask updater.
+        
+        :param config_file: path to the YAML configuration file for
+                             this particular instance.
+        :type config_file: str
+        """
+
+        with open(config_file) as f:
+            self.config = yaml.load(f, Loader=yaml.FullLoader)
+
+        self.db_conn = None
+        self.mysql_conf = '~/replica.my.cnf'
+
+        # Query to fetch a number of random pages from a given category.
+        self.random_page_query = '''SELECT /* LIMIT:120 */
+                                    page_id, page_title
+                                    FROM page JOIN categorylinks
+                                    ON page_id = cl_from
+                                    WHERE cl_to = %(cat_name)s
+                                    AND page_namespace = %(ns)s
+                                    AND page_random >= RAND()
+                                    ORDER BY page_random LIMIT %(n_pages)s'''
+
+        # Query to fetch all pages in a given namespace
+        # from a given category
+        self.all_pages_query = '''SELECT page_id, page_title
+                                  FROM page JOIN categorylinks
+                                  ON page_id = cl_from
+                                  WHERE cl_to = %(cat_name)s
+                                  AND page_namespace = %(ns)s'''
+
+    def db_connect(self):
+        '''
+        Connect to the database defined by this instance's configuration.
+        '''
+
+        host_name = '{}.web.db.svc.eqiad.wmflabs'.format(self.config['db_host'])
+        
+        if self.db_conn:
+            self.db_disconnect()
+
+        try:
+            self.db_conn = pymysql.connect(
+                db=self.config['db_name'],
+                host=host_name,
+                read_default_file=os.path.expanduser(self.mysql_conf),
+                use_unicode=False,
+                charset=None)
+        except pymysql.Error as e:
+            logging.error("DB connection to {} on server {} failed".format(
+                self.config['db_name'], host_name))
+            logging.error("error {}: {}".format(e.args[0], e.args[1]))
+            return(False)
+        
+        # Ok, done
+        return(True)
+
+    def db_disconnect(self):
+        if self.db_conn is None:
+            return(True) # already disconnected
+
+        try:
+            self.db_conn.close()
+        except pymysql.Error as e:
+            logging.error("unable to disconnect from database")
+            logging.error("error {}: {}".format(e.args[0], e.args[1]))
+            return(False)
+
+        # Ok, done
+        return(True)
+
+    def find_stubs(self, category, n):
+        '''
+        Use the database to pick a random stub category,
+        then pick a sufficient number of pages from that category.
+        Expects a working database connection to exist as `self.db_conn`
+
+        :param category: the parent stub category.
+        :type category: str
+
+        :param n: number of pages to find
+        :type n: int
+        '''
+
+        logging.info("trying to find {} stub tasks...".format(n))
+
+        stub_articles = list()
+        
+        exit_loop = False
+        while len(stub_articles) < n and not exit_loop:
+            stub_category = None
+            attempts = 0
+            while attempts < self.config['max_query_attempts']:
+                try:
+                    with self.db_conn.cursor() as db_cursor:
+                        # pick one random stub category (ns = 14)
+                        db_cursor.execute(
+                            self.random_page_query,
+                            {'cat_name': category.replace(
+                                ' ', '_').encode('utf-8'),
+                             'ns': 14,
+                             'n_pages': 1})
+                        
+                        for (page_id, page_title) in db_cursor:
+                            stub_category = page_title.decode(
+                                'utf-8').replace('_', ' ')
+                except pymysql.Error as e:
+                    attempts += 1
+                    logging.error("query error {}: {}".format(
+                        e.args[0], e.args[1]))
+                    if e.errno == pymysql.errnos['CR_SERVER_GONE_ERROR'] \
+                       or e.errno == pymysql.errnos['CR_SERVER_LOST']:
+                        # lost connection, reconnect
+                        self.db_connect()
+                else: 
+                    break # out of attempt-loop
+
+            if not stub_category:
+                logging.error("unable to find random stub category")
+                exit_loop = True
+            else:
+                stub_articles.extend(self.find_pages(stub_category, n))
+                
+        # truncate to the right number of pages per task category
+        stub_articles = stub_articles[:n]
+
+        logging.info("found {} stub pages".format(len(stub_articles)))
+
+        return(stub_articles)
+
+    def find_all_pages(self, category_name):
+        """
+        Use the database to fetch all Main & Talk namespace pages from
+        a given category.  Expects a working database connection
+        to exist as `self.db_conn`
+
+        :param category_name: name of the category to grab pages from
+        :type category_name: str
+        """
+
+        logging.info("finding all Main namespace pages in category {}".format(
+            category_name))
+
+        found_pages = set()
+        attempts = 0
+        while attempts <  self.config['max_query_attempts']:
+            try:
+                with self.db_conn.cursor() as db_cursor:
+                    db_cursor.execute(
+                        self.all_pages_query,
+                        {'cat_name': category_name.replace(
+                            ' ', '_').encode('utf-8'),
+                         'ns': 0}) # ns 0 is Main (articles)
+
+                    for (page_id, page_title) in db_cursor:
+                        found_pages.add(
+                            page_title.decode('utf-8').replace('_', ' '))
+
+            except pymysql.Error as e:
+                attempts += 1
+                logging.error("query error {}: {}".format(e.args[0], e.args[1]))
+                if e.errno == pymysql.errnos['CR_SERVER_GONE_ERROR'] \
+                        or e.errno == pymysql.errnos['CR_SERVER_LOST']:
+                    # lost connection, reconnect
+                    self.db_connect()
+            else:
+                break # break out of query attempt loop
+            
+        if attempts >= self.config['max_query_attempts']:
+            logging.error("exhausted number of query attempts")
+
+        logging.info("finding all Talk namespace pages in category {}".format(
+            category_name))
+
+        attempts = 0
+        while attempts <  self.config['max_query_attempts']:
+            try:
+                with self.db_conn.cursor() as db_cursor:
+                    db_cursor.execute(
+                        self.all_pages_query,
+                        {'cat_name': category_name.replace(
+                            ' ', '_').encode('utf-8'),
+                         'ns': 1}) # ns 1 is (article) Talk
+
+                    for (page_id, page_title) in db_cursor:
+                        found_pages.add(
+                            page_title.decode('utf-8').replace('_', ' '))
+
+            except pymysql.Error as e:
+                attempts += 1
+                logging.error("query error {}: {}".format(e.args[0], e.args[1]))
+                if e.errno == pymysql.errnos['CR_SERVER_GONE_ERROR'] \
+                        or e.errno == pymysql.errnos['CR_SERVER_LOST']:
+                    # lost connection, reconnect
+                    self.db_connect()
+            else:
+                break # break out of query attempt loop
+            
+        if attempts >= self.config['max_query_attempts']:
+            logging.error("exhausted number of query attempts")
+            
+        logging.info("found {} pages in this category".format(
+            len(found_pages)))
+
+        return(found_pages)
+
+    def find_subcategory_pages(self, category_name):
+        """
+        Use the database to retrieve all direct descendant
+        sub-categories of the given category.  Then find all pages
+        in all the sub-categories and return the union of all of them.
+
+        :param category_name: name of the starting category, which we'll
+                              grab all sub-categories from.
+        :type category_name: str
+        """
+
+        logging.info("finding sub-category pages of category {}".format(
+            category_name))
+
+        sub_categories = list()
+        attempts = 0
+        while attempts < self.config['max_query_attempts']:
+            try:
+                with self.db_conn.cursor() as db_cursor:
+                    db_cursor.execute(
+                        self.all_pages_query,
+                        {'cat_name': category_name.replace(
+                            ' ', '_').encode('utf-8'),
+                         'ns': 14} # namespace 14 is the Category namespace
+                         )
+
+                    for (page_id, page_title) in db_cursor:
+                        sub_categories.append(
+                            page_title.decode('utf-8').replace('_', ' '))
+
+            except pymysql.Error as e:
+                attempts += 1;
+                logging.error("query error {}: {}".format(e.args[0], e.args[1]))
+                if e.errno == pymysql.errnos['CR_SERVER_GONE_ERROR'] \
+                   or e.errno == pymysql.errnos['CR_SERVER_LOST']:
+                    # lost connection, reconnect
+                    self.db_connect()
+            else:
+                break # break out of query attempt loop
+            
+        if attempts >= self.config['max_query_attempts']:
+            logging.error("exhausted number of query attempts finding sub-categories")
+            return(list())
+
+        logging.info("found {} sub-categories".format(len(sub_categories)))
+        
+        found_pages = set()
+        for category_name in sub_categories:
+            subcat_pages = self.find_all_pages(category_name)
+            found_pages = found_pages.union(subcat_pages)
+
+        return(found_pages)
+
+    def find_subsubcategory_pages(self, category_name):
+        """
+        Get all subcategories of the given category, then iteratively
+        call `self.find_subcategory_pages` for each of them to get
+        all pages two levels down.
+
+        :param category_name: name of the starting category
+        :type category_name: str
+        """
+
+        logging.info("finding all pages from sub-sub-categories of {}".format(
+            category_name))
+
+        sub_categories = list()
+        attempts = 0
+        while attempts <  self.config['max_query_attempts']:
+            try:
+                with self.db_conn.cursor() as db_cursor:
+                    db_cursor.execute(
+                        self.all_pages_query,
+                        {'cat_name': category_name.replace(
+                            ' ', '_').encode('utf-8'),
+                         'ns': 14} # namespace 14 is the Category namespace
+                        )
+
+                for (page_i, page_title) in db_cursor:
+                    sub_categories.append(
+                        page_title.decode('utf-8').replace('_', ' '))
+
+            except pymysql.Error as e:
+                attempts += 1;
+                logging.error("query error {}: {}".format(e.args[0], e.args[1]))
+                if e.errno == pymysql.errnos['CR_SERVER_GONE_ERROR'] \
+                   or e.errno == pymysql.errnos['CR_SERVER_LOST']:
+                    # lost connection, reconnect
+                    self.db_connect()
+            else:
+                break # break out of query attempt loop
+            
+        if attempts >= self.config['max_query_attempts']:
+            logging.error("exhausted number of query attempts")
+            return(list())
+
+        logging.info("found {} sub-categories".format(len(sub_categories)))
+        
+        found_pages = set()
+        for category_name in sub_categories:
+            subcat_pages = self.find_subcategory_pages(category_name)
+            found_pages = found_pages.union(subcat_pages)
+
+        return(found_pages)
+
+    def find_random_pages(self, category_name, n):
+        """
+        Use the database to pick a number of pages from
+        a given category. Expects a working database connection
+        to exist as `self.db_conn`
+
+        :param category_name: the category we're picking pages from
+        :type category_name: str
+
+        :param n: number of pages to return
+        :type n: int
+        """
+
+        logging.info("finding {n} tasks from category {cat}".format(
+            n=n, cat=category_name))
+
+        found_pages = list()
+        attempts = 0
+        while attempts < self.config['max_query_attempts']:
+            try:
+                with self.db_conn.cursor() as db_cursor:
+                    db_cursor.execute(
+                        self.random_page_query,
+                        {'cat_name': category_name.replace(
+                            ' ', '_').encode('utf-8'),
+                         'ns': 0,
+                         'n_pages' : n})
+
+                    for (page_id, page_title) in db_cursor:
+                        found_pages.append(
+                            page_title.decode('utf-8').replace('_', ' '))
+            except pymysql.Error as e:
+                attempts += 1;
+                logging.error("query error {}: {}".format(e.args[0], e.args[1]))
+                if e.errno == pymysql.errnos['CR_SERVER_GONE_ERROR'] \
+                   or e.errno == pymysql.errnos['CR_SERVER_LOST']:
+                    # lost connection, reconnect
+                    self.db_connect()
+            else:
+                break # exit query attempt loop
+            
+        if attempts >= self.config['max_query_attempts']:
+            logging.error("exhausted number of query attempts")
+
+        logging.info("found {} tasks".format(len(found_pages)))
+
+        return(found_pages)
+
+    def find_pages(self, cat_def, n):
+        """
+        Pick a number of pages using a given category definition through
+        sub-methods that access the database. The category definition can
+        be one of:
+
+        1: A string, the name of a category to randomly pick articles from
+        2: A list of strings, names of categories to randomly pick articles from.
+        3: A list where the first element is "use-subs". The second element in
+           the list is a category, and we'll randomly pick articles from that
+           category's sub-categories.
+        4: A list where the first element is "use-subsubs". The second element in
+           the list is a category, and we'll randomly pick articles from that
+           cateogry's sub-sub-categories.
+
+        For items 2, 3, and 4 above, articles in the categories are combined into
+        a set before articles are randomly picked.
+
+        :param cat_def: Category-definition of where to grab pages from
+        :type cat_def: str or list
+
+        :param n: number of pages to fetch
+        :type n: int
+        """
+
+        if isinstance(cat_def, str):
+            return(self.find_random_pages(cat_def, n))
+        else:
+            # Create a set of all pages we find,
+            # from which we'll randomly sample.
+            found_pages = set()
+            if isinstance(cat_def, list) \
+               and cat_def[0] == 'use-subs':
+                found_pages = self.find_subcategory_pages(cat_def[1])
+            elif isinstance(cat_def, list) \
+                 and cat_def[0] == 'use-subsubs':
+                found_pages = self.find_subsubcategory_pages(cat_def[1])
+            elif isinstance(cat_def, list):
+                for cat_name in cat_def:
+                    found_pages = found_pages.union(
+                        self.find_all_pages(cat_name))
+            elif isinstance(cat_def, tuple):
+                # Category name is the second element
+                found_pages = self.find_subcategory_pages(cat_def[1])
+
+        if not found_pages:
+            # Something went wrong, bummer
+            return(found_pages)
+        elif len(found_pages) < n:
+            # not enough to sample, return everything
+            return(found_pages)
+        else:
+            return(random.sample(found_pages, n))
+
+    def update(self):
+        '''
+        Update the list of open tasks.
+        '''
+
+        # log in to the given wiki
+        logging.info("logging in to {}-wiki".format(self.config['lang_code']))
+
+        site = pywikibot.getSite(self.config['lang_code'])
+        site.login()
+
+        # Did we log in?
+        if site.username() is None:
+            logging.error("failed to log in correctly, aborting")
+            return()
+
+        # connect to the database
+        logging.info("connecting to the database")
+
+        if not self.db_connect():
+            # shouldn't need to log anything, db_connect() does it for us
+            return(False)
+
+        # Tasks defined in the configuration:
+        task_list = self.config['tasks']
+
+        # Found articles maps task ID to a list of articles:
+        found_tasks = defaultdict(list)
+
+        if 'stub' in task_list:
+            logging.info("finding stub tasks...")
+
+            found_tasks['stub'] = self.find_stubs(
+                task_list['stub'],
+                self.config['pages_per_category'])
+
+            logging.info("done finding stub tasks")
+
+        # Now, for all the other categories...
+        for (task_id, task_def) in task_list.items():
+            if task_id == 'stub':
+                # we handled that already...
+                continue
+
+            logging.info("finding tasks for id {} with definition {}".format(
+                task_id, task_def))
+
+            found_tasks[task_id] = self.find_pages(
+                task_def, self.config['pages_per_category'])
+
+            logging.info("find complete, found {} pages in this category".format(
+                len(found_tasks[task_id])))
+
+        # Go through the found tasks and turn the list of page titles
+        # into wikitext, an unordered list (*) where each list item
+        ## is a link to a given page
+        
+        for (task_id, pages) in found_tasks.items():
+            if not pages:
+                found_tasks[task_id] = "None"
+            else:
+                link_list = list()
+                for page in pages:
+                    page_obj = pywikibot.Page(site, page)
+                    link_list.append('* {}'.format(
+                        page_obj.title(asLink=True, insite=site)))
+
+                found_tasks[task_id] = '\n'.join(link_list)
+                    
+        logging.info("turned page titles into page links")
+        logging.info("getting wikitext of task page {}".format(
+            self.config['opentask_page']))
+
+        tasktext = None
+        try:
+            taskpage = pywikibot.Page(site, self.config['opentask_page'])
+            tasktext = taskpage.get()
+        except pywikibot.exceptions.NoPage:
+            logging.warning("task page {} does not exist".format(
+                self.config['opentask_page']))
+        except pywikibot.exceptions.IsRedirectPage:
+            logging.warning("task page {} is a redirect".format(
+                self.config['opentask_page']))
+        except pywikibot.data.api.TimeoutError:
+            logging.error("TimeOutError, unable to continue")
+
+        if tasktext is None:
+            return()
+
+        logging.info("got wikitext, substituting page lists...")
+
+        for (task_id, page_list) in found_tasks.items():
+            # note: using re.DOTALL because we need .*? to match \n
+            #       since our content is a list
+            tasktext = re.sub(
+                r'<div\s+id="{task}"\s*>(.*?)</div>'.format(task=task_id),
+                r'<div id="{task}">\n{pagelist}</div>'.format(
+                    task=task_id, pagelist=page_list),
+                tasktext, flags=re.DOTALL)
+
+        if self.config['test_run']:
+            logging.info("running a test, printing out new wikitext:\n")
+            print(tasktext)
+        else:
+            logging.info("saving page with new text")
+            taskpage.text = tasktext
+            try:
+                taskpage.save(comment=self.config['edit_comment'])
+            except pywikibot.exceptions.EditConflict:
+                logging.error("edit conflict saving {}, not retrying".format(
+                    self.config['opentask_page']))
+                return()
+            except pywikibot.exceptions.PageNotSaved as e:
+                logging.error("saving {} failed, unable to continue".format(
+                    self.config['opentask_page']))
+                logging.error("pywikibot error: {}".format(e))
+                return()
+            except pywikibot.data.api.TimeoutError:
+                logging.error("time out error saving {}".format(
+                    self.config['opentask_page']))
+                return()
+
+        logging.info("list of open tasks successfully updated")
+
+        self.db_disconnect()
+        return()
 
 def main():
-	import argparse
+    import argparse
 
-	cli_parser = argparse.ArgumentParser(
-		description="Program to update list of open tasks for a given Wikipedia.")
+    cli_parser = argparse.ArgumentParser(
+        description="Program to update list of open tasks for a given Wikipedia.")
 
-	# Option to control the edit comment
-	cli_parser.add_argument('-c', '--comment', default=None,
-				help="edit comment to use when saving the new page")
+    # Verbosity option
+    cli_parser.add_argument('-v', '--verbose', action='store_true',
+                help='if set informational output is written to stderr')
 
-	# Option to read the list of tasks (as JSON) from a file
-	cli_parser.add_argument('-f', '--taskfile', default=None,
-				help="path to file containing task definition in JSON format")
+    # Configuration file has to be provided
+    cli_parser.add_argument('config_file', default=None,
+                help="path to YAML configuration file")
+        
+    args = cli_parser.parse_args()
 
-	# Option to control language
-	cli_parser.add_argument('-l', '--lang', default=u'en',
-				help="language code of the Wikipedia we're working on (default: en)")
+    if args.verbose:
+        logging.basicConfig(level=logging.INFO)
 
-	# Option to control the MySQL configuration file
-	cli_parser.add_argument('-m', '--mysqlconf', default=None,
-				help="path to MySQL configuration file")
-
-	# Option to control number of pages per category of tasks
-	cli_parser.add_argument('-n', '--numpages', default=5,
-				help="number of pages displayed in each task category (default: 5)")
-
-	# Option to control where the list of open tasks are
-	cli_parser.add_argument('-p', '--page', default=None,
-				help="title of the page with the open tasks")
-
-	# Test option
-	cli_parser.add_argument('-t', '--test', action='store_true',
-				help='if set the program does not save the page, writes final wikitext to stdout instead')
-	
-	# Verbosity option
-	cli_parser.add_argument('-v', '--verbose', action='store_true',
-				help='if set informational output is written to stderr')
-
-	args = cli_parser.parse_args()
-
-	if args.verbose:
-		logging.basicConfig(level=logging.DEBUG)
-
-        if args.taskfile:
-                import codecs
-                import json
-                try:
-                        with codecs.open(args.taskfile, 'r', 'utf-8') as infile:
-                                args.taskdef = json.load(infile)
-                except IOError:
-                        logging.error('Unable to open task definition file {0}, cannot continue'.format(args.taskfile))
-                        return()
-                except:
-                        logging.error('Unable to parse task definition file {0} as JSON, cannot continue'.format(args.taskfile))
-                        return()
-        else:
-                args.taskdef = None
-                        
-	taskUpdater = OpenTaskUpdater(lang=args.lang,
-				      mysqlConf=args.mysqlconf,
-				      taskPage=args.page,
-				      taskDef=args.taskdef,
-				      pagesPerCategory=args.numpages,
-				      editComment=args.comment,
-				      testRun=args.test)
-	try:
-		taskUpdater.update()
-	finally:
-		taskUpdater.stopme()
+    task_updater = OpenTaskUpdater(args.config_file)
+    task_updater.update()
 
 if __name__ == "__main__":
-	main()
+    main()
