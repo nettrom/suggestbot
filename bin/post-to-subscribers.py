@@ -38,6 +38,10 @@ def main():
     # Add verbosity option
     cli_parser.add_argument('-v', '--verbose', action='store_true',
                             help='Be more verbose')
+
+    # Add option to skip posting
+    cli_parser.add_argument('-u', '--update_only', action = 'store_true',
+                            help = 'Update the list of subscribers, do not post')
     
     # Add required language parameter
     cli_parser.add_argument('lang',
@@ -49,7 +53,8 @@ def main():
 
     updater = Subscribers(args.lang)
     updater.update_subscribers()
-    updater.post_suggestions()
+    if not args.update_only:
+        updater.post_suggestions()
     return()
 
 if __name__ == "__main__":

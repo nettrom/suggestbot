@@ -489,8 +489,8 @@ class Subscribers:
 
             # Grab all links to the config template that are redirects
             warningsList = list(configPage.getReferences(
-                onlyTemplateInclusion=True,
-                redirectsOnly=True))
+                only_template_inclusion = True,
+                filter_redirects = True))
 
             # Output all of them to a file so we know which users might
             # have changed usernames.
@@ -514,9 +514,9 @@ class Subscribers:
             # speed things up:
             for page in PreloadingGenerator(
                     configPage.getReferences(
-                        onlyTemplateInclusion=True,
-                        redirectsOnly=False),
-                    step=10):
+                        only_template_inclusion = True,
+                        filter_redirects = False),
+                    groupsize = 10):
                 # Is this one of our own pages?
                 if page in ignorePages:
                     continue
@@ -531,8 +531,8 @@ class Subscribers:
                     continue
 
                 #   2: fetch the title without namespace
-                page_title = page.title(withNamespace=False,
-                                        withSection=False)
+                page_title = page.title(with_ns = False,
+                                        with_section = False)
 
                 # split the page title on first "/" in case it's a subpage.
                 subpageTitle = None

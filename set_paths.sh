@@ -13,7 +13,7 @@
 # having an account with them all to ourselves.
 
 scriptdir=`pwd`;
-export PYWIKIBOT2_DIR=$HOME/.pywikibot;
+export PYWIKIBOT_DIR=$HOME/.pywikibot;
 # export PYWIKIPEDIA_DIR='/export/scratch/morten/work/SuggestBot/pywikipedia';
 export SUGGESTBOT_DIR=$scriptdir;
 # export PYTHONPATH=$SUGGESTBOT_DIR

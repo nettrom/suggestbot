@@ -342,7 +342,9 @@ class TaskUpdater:
         # store the article titles for these categories
         for cat_name in cats:
             cat = pywikibot.Category(
-                self.site, self.site.category_namespace() + ":" + cat_name)
+                self.site,
+                '{}:{}'.format(
+                    self.site.namespaces.CATEGORY.custom_name, cat_name))
             self.seen_categories.add(cat.title())
                 
             logging.info("storing titles in {}".format(cat_name))
@@ -369,7 +371,9 @@ class TaskUpdater:
             # sub-categories that we might not have traversed due to the level
             # limitation.
             cat = pywikibot.Category(
-                self.site, self.site.category_namespace() + ":" + cat_name)
+                self.site,
+                '{}:{}'.format(
+                    self.site.namespaces.CATEGORY.custom_name, cat_name))
             if cat.title() in self.seen_categories:
                 continue
 

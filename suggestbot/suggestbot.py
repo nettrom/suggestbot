@@ -75,11 +75,11 @@ class SuggestBot:
             config.wp_langcode = lang
 
         # config our site, note that this also logs us in
-        self.site = pywikibot.getSite(config.wp_langcode)
+        self.site = pywikibot.Site(config.wp_langcode)
 
     def login(self):
         # instantiating a site object logs us in...
-        self.site = pywikibot.getSite(config.wp_langcode)
+        self.site = pywikibot.Site(config.wp_langcode)
         self.site.login()
         # then we can simply check if we're logged in
         return(self.isLoggedIn())

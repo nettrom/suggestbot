@@ -499,7 +499,7 @@ tasks = {
             'exclusion': None,
             },
         'ORPHAN': {
-            'categories': ["Tous les articles orphelins"],
+            'categories': ["Article orphelin/Liste complète"],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
