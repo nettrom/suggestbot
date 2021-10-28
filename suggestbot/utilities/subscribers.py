@@ -200,22 +200,17 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
         :type page: pywikibot.Page
         '''
 
-        history = page.getVersionHistory()
-        hist_length = len(history)
-        edited = None
-        i = 0
-        logging.debug("potentially checking {n} edits to {title}".format(
-            n=hist_length, title=page.title()))
-        while i < hist_length and not edited:
-            (revid, edittime, username, summary) = history[i]
-            # I can just check what username I'm logged in
-            # as and then use that... duh!
-            if username == self.site.user():
-                logging.debug("found SBot contribution at time {timestamp}".format(timestamp=edittime.strftime("%Y%m%d%H%M%S")))
-                edited = edittime
-                
-            i += 1
+        logging.debug('Looking for SuggestBot edits to {}'.format(page.title()))
 
+        edited = None
+        for rev in page.revisions():
+            if rev.user == self.site.user():
+                logging.debug(
+                    'found SuggestBot contribution at time {}'.format(rev.timestamp)
+                )
+                edited = rev.timestamp
+                break
+                
         return(edited)
                 
     def _insert(self, sbdb=None):
@@ -263,18 +258,18 @@ Retired: {}""".format(self._lang, self._username, self._last_rec,
         # If one is None, but not the other, use the one that's not None.
         if usertalkpage_edit is not None and subpage_edit is None:
             logging.debug("using edit to user talk page as last rec timestamp.")
-            self.last_rec = usertalkpage_edit.strftime("%Y%m%d%H%M%S")
+            self.last_rec = usertalkpage_edit
         elif subpage_edit is not None:
             logging.debug("using edit to {} as last rec timestamp".format(
                 self._page_title))
-            self.last_rec = subpage_edit.strftime("%Y%m%d%H%M%S")
+            self.last_rec = subpage_edit
         elif subpage_edit is not None and usertalkpage_edit is not None:
             # If both are not None, then use the more recent one:
             logging.debug("using the more recent edit to either user talk page or sub page as last rec timestamp.")
             if usertalkpage_edit >= subpage_edit:
-                self.last_rec = usertalkpage_edit.strftime("%Y%m%d%H%M%S")
+                self.last_rec = usertalkpage_edit
             else:
-                self.last_rec = subpage_edit.strftime("%Y%m%d%H%M%S")
+                self.last_rec = subpage_edit
 
         # No need for anything else, we'll then store NULL, and it will
         # be populated when the regular user update runs.
