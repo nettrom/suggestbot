@@ -7,7 +7,7 @@ db_host: enwiki
 db_name: enwiki_p
 
 # Title of the Opentask page
-opentask_page: "Wikipedia:Community portal/Opentask"
+opentask_page: "Wikipedia:Community portal/Open tasks"
 
 # Comment used when making the edit
 edit_comment: "Updating list of open tasks..."
