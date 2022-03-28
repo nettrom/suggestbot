@@ -81,7 +81,7 @@ class OpenTaskUpdater:
 		if editComment:
 			self.editComment = editComment
 
-		self.taskPage = u"Wikipedia:Community portal/Opentask"
+		self.taskPage = u"Wikipedia:Community portal/Open tasks"
 		if taskPage:
 			self.taskPage = taskPage
 
