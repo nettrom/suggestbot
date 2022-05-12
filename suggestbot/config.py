@@ -347,7 +347,7 @@ tasks = {
             'exclusion': None,
             },
         'WIKIFY': {
-            'categories': ['Википедия:Статьи к викификации'],
+            'categories': ['Википедия:Статьи с проблемами в оформлении'],
             'recurseCategories': {},
             'inclusion': None,
             'exclusion': None,
