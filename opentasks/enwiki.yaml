@@ -52,7 +52,7 @@ tasks:
     - "Wikipedia introduction cleanup"
   copyedit: "All articles needing copy edit"
   update: "All Wikipedia articles in need of updating"
-  translate: "Wikipedia articles needing cleanup after translation"
+  translate: "All Wikipedia articles needing cleanup after translation"
   verify: "All pages needing factual verification"
   or: "All articles that may contain original research"
   stub: "Stub categories"
